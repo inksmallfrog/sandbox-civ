@@ -1,0 +1,24 @@
+# 群邦纪元 HexaCiv · M1 演示脚本
+#
+# 格式：  回合  命令类型  key=value …        # 之后是注释
+#   as=nation.0001   改写提交者（默认 host）
+#   reason=…         改写这条命令的理由，会进因果链
+#
+# hex / town / nation 都可以写 auto：选址规则在 core.basic 的 Siting 里（§6.6 的最小前身），
+# 所以这份脚本换任何种子都成立——sim hash / sim replay 就靠这一点。
+
+1  nation.found       name=魏                 reason=开局
+
+# 先立国再开城：国库出 6 石建城费（§5.5 基建），第一年就能看见「钱花在哪」
+2  town.found         hex=auto nation=auto name=初城    reason=第一座城
+3  building.build     town=auto building=def:building.farm hex=auto  reason=开荒
+4  building.build     town=auto building=def:building.farm hex=auto  reason=继续摊田
+6  building.build     town=auto building=def:building.farm hex=auto  reason=第三块田
+7  building.build     town=auto building=def:building.granary        reason=起粮仓压损耗
+8  building.build     town=auto building=def:building.farm hex=auto  reason=第四块田
+
+# 第二座城：验证 §6.6 的间距限制与「国库见底就开不了城」
+10 town.found         hex=auto nation=auto            reason=分城
+
+# 之后几年什么都不做：让歉收、损耗与满意度自己演一年，看崩溃线在哪
+# 12 …（删掉注释即可续写）

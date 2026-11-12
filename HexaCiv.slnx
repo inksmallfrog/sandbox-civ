@@ -2,5 +2,6 @@
   <Folder Name="/src/">
     <Project Path="src/SimCore/SimCore.csproj" />
     <Project Path="src/Plugins/core.basic/core.basic.csproj" />
+    <Project Path="src/HexaCiv.Cli/HexaCiv.Cli.csproj" />
   </Folder>
 </Solution>
