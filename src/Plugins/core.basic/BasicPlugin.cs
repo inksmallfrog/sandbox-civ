@@ -118,7 +118,7 @@ public sealed class BasicPlugin : IPlugin
             {
                 if (value.Kind == ValueKind.None) continue;
                 if (value.AsFix().Raw < 0)
-                    bad.Add($"{name}：{path} = {value.AsFix().Text} 为负（§5.6：缺粮是吃空仓库，不是欠粮）");
+                    bad.Add($"{name}：{path} = {value.AsFix().Text} 为负（§5.4：缺粮是吃空仓库，不是欠粮）");
             }
 
             Fix facility = ctx.GetFix(town.Id, F.TownFacility, Fix.One);

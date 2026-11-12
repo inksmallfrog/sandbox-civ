@@ -43,7 +43,7 @@ public static class F
 
     // ---- 城镇（§4.1 的数据模型）----
     public const string TownName = "town.name";
-    public const string TownOwner = "town.owner";              // str: nation.*，空 = 独立城镇（§7.1）
+    public const string TownOwner = "town.owner";              // str: nation.*，空 = 独立城镇（§4.1 owner 可为 null）
     public const string TownSovereignty = "town.sovereignty";   // core/province/autonomous/vassal/occupied/independent
     public const string TownTier = "town.tier";                 // village/town/city/metropolis
     public const string TownFounded = "town.founded";            // int: 建城回合

@@ -118,8 +118,8 @@ public class AcceptanceTests
     public void 命令被拒也要留下记录而不是静悄悄()
     {
         var sim = Open(5);
-        // §7.1：不带 nation 的建城是合法的「独立城镇」，不是错误——先钉住这条，
-        // 免得下一个人把「没有国家」当 bug 改成拒收，把独立城镇这条路堵死。
+        // §4.1（owner 可为 null）+ §6.2（独立是归属表的一行）：不带 nation 的建城是合法的「独立城镇」，
+        // 不是错误——先钉住这条，免得下一个人把「没有国家」当 bug 改成拒收，把独立城镇这条路堵死。
         sim.SubmitTarget("host", "town.found", "无主之城", ("hex", "auto"));
         var r = sim.AdvanceTurn();
         CommandResult solo = Assert.Single(r.Commands, c => c.Accepted);

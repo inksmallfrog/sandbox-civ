@@ -15,7 +15,7 @@ public class CoreBasicTests
     private static Simulation Open(ulong seed) =>
         new Simulation(new SimConfig { Seed = seed }).Bootstrap();
 
-    /// <summary>开局一座城（不带 nation = 独立城镇，§7.1），再跑 turns 年（建城发生在第 1 年的意图段）。</summary>
+    /// <summary>开局一座城（不带 nation = 独立城镇，§4.1 的 owner 可为 null），再跑 turns 年（建城发生在第 1 年的意图段）。</summary>
     private static Simulation OneTown(ulong seed, int turns = 1)
     {
         var sim = Open(seed);
@@ -36,7 +36,7 @@ public class CoreBasicTests
     private static List<Entity> Tiles(Simulation sim, EntityId town) =>
         sim.World.OfKind("hex").Where(h => F.IdOf(sim.World.GetStr(h.Id, F.HexOwner, "")) == town).ToList();
 
-    // ================= 建城（§6.6 / §3.6 / §4.1）=================
+    // ================= 建城（§3.8 / §3.6 / §4.1）=================
 
     [Fact]
     public void 建城即有人有仓底有辖地()
@@ -46,7 +46,7 @@ public class CoreBasicTests
         var r = sim.AdvanceTurn();
         var town = Town(sim);
 
-        // §6.6 的落点要读建城那一年的日志：同一回合的第 10/12 步还会动这些字段，现值已经不是初值了
+        // §3.8 的落点要读建城那一年的日志：同一回合的第 10/12 步还会动这些字段，现值已经不是初值了
         SimValue Written(string path, string reasonToken) => SimValue.ParseCanonical(
             Assert.Single(r.Diffs, d => d.Path == path && d.Reason.Contains(reasonToken, StringComparison.Ordinal)).After);
 
@@ -131,7 +131,7 @@ public class CoreBasicTests
         Assert.Equal(2, towns.Count);
         var (aq, ar) = MapGen.Coords(F.IdOf(towns[0].GetStr(F.TownSite)));
         var (bq, br) = MapGen.Coords(F.IdOf(towns[1].GetStr(F.TownSite)));
-        // §6.6 的铺城限制在 M1 用空间顶替（见 CHANGELOG-DESIGN），判据写在 TownOps.MinTownSpacing
+        // §3.8 原文就是「距最近城镇 ≥ 3 格」，这里照抄；同表的「每国每 5 年最多新建 1 城」M1 未实装
         Assert.True(MapGen.Distance(aq - bq, ar - br) >= TownOps.MinTownSpacing,
             $"两城城址只隔 {MapGen.Distance(aq - bq, ar - br)} 格，下限是 {TownOps.MinTownSpacing}");
 
@@ -222,7 +222,7 @@ public class CoreBasicTests
 
         Fix grain = sim.Data.Get("good.food").GetFix("stockCapPerPop");
         Assert.Equal(Fix.Mul(grain, Fix.FromInt(pop)) + Fix.FromInt(20),
-            town.GetFix(F.TownStockCap("good.food"), Fix.Zero));             // §5.6：人口×2 + 粮仓×20
+            town.GetFix(F.TownStockCap("good.food"), Fix.Zero));             // §5.4：人口×2 + 粮仓×20
         Assert.Equal(Fix.FromPercent(5) - Fix.FromPercent(2),
             town.GetFix(F.TownSpoilage("good.food"), Fix.Zero));             // §5.7：5% − 每级 2%
     }
@@ -238,7 +238,7 @@ public class CoreBasicTests
             {
                 Fix stock = sim.World.GetFix(town.Id, F.TownStock("good.food"), Fix.Zero);
                 Fix cap = sim.World.GetFix(town.Id, F.TownStockCap("good.food"), Fix.MaxValue);
-                Assert.True(stock <= cap, $"{town.Id} 存粮 {stock.Text} 越过仓容 {cap.Text}（§5.6 步 6：仓满即抛）");
+                Assert.True(stock <= cap, $"{town.Id} 存粮 {stock.Text} 越过仓容 {cap.Text}（§5.4 步 6：仓满即抛）");
                 Assert.True(stock >= Fix.Zero, $"{town.Id} 存粮为负：{stock.Text}");
             }
         }

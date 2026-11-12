@@ -3,7 +3,7 @@ using SimCore;
 namespace CoreBasic;
 
 /// <summary>
-/// 建城与营造（GDD §6.6 城镇命令、§3.6 辖地、§4.1 城镇数据模型）。
+/// 建城与营造（GDD §3.8 建城、§3.6 辖地、§4.1 城镇数据模型）。
 ///
 /// 这两个命令是玩家最早碰到的东西，所以驳回理由必须说人话：
 /// 「不行，并且告诉你为什么不行」是 §1.3 核心循环里「代价看得见」的一部分。
@@ -15,8 +15,9 @@ public static class TownOps
     public const int ClaimMaxTiles = 12;
 
     /// <summary>
-    /// 两城最小间距。§6.6 的「建城 5 回合冷却」在 M1 先用空间限制顶替——
-    /// 它同样挡住「铺城流」，但不需要时间/外交系统就能判定，也不引入跨回合的隐藏状态。
+    /// 两城最小间距 = §3.8 的「距最近城镇 ≥ 3 格」，原值照抄，不是替身。
+    /// 同一张表里的另一条「每国每 5 年最多新建 1 城」M1 <b>没做</b>：它要跨回合的国家命令配额，
+    /// 而 M1 没有 AP（§6.3），做在 Core 里又违反「Core 无玩法」。缺口记在 docs/CHANGELOG-DESIGN.md。
     /// </summary>
     public const int MinTownSpacing = 3;
 
@@ -30,7 +31,7 @@ public static class TownOps
     public static readonly Fix FoundStockFood = Fix.FromInt(8);
 
     /// <summary>
-    /// <c>town.found</c>：args = hex（地块或 <c>auto</c>）、name（可省）、nation（可省 = 独立城镇，§7.1；也可写 <c>auto</c> = 第一个国家）。
+    /// <c>town.found</c>：args = hex（地块或 <c>auto</c>）、name（可省）、nation（可省 = 独立城镇，§4.1；也可写 <c>auto</c> = 第一个国家）。
     ///
     /// <c>hex=auto</c> 是给脚本、标定与 AI 托管用的：命令必须能被<b>与种子无关</b>地写出来，
     /// 选址规则本身也是玩法知识，所以放在 <see cref="Siting"/> 里而不是壳层（§10.1）。
@@ -68,7 +69,7 @@ public static class TownOps
             var (q, r) = MapGen.Coords(site);
             int d = MapGen.Distance(q - hq, r - hr);
             if (d < MinTownSpacing)
-                return CommandResult.Reject(cmd, $"离 {ctx.GetStr(t.Id, F.TownName)}（{t.Id}）只有 {d} 格，§6.6 的铺城限制要求至少隔 {MinTownSpacing} 格");
+                return CommandResult.Reject(cmd, $"离 {ctx.GetStr(t.Id, F.TownName)}（{t.Id}）只有 {d} 格，§3.8 的铺城限制要求至少隔 {MinTownSpacing} 格");
         }
 
         if (!nation.IsEmpty)
@@ -78,17 +79,17 @@ public static class TownOps
                 return CommandResult.Reject(cmd, $"{nation} 国库只有 {treasury.Text} 石粮，建城要 {FoundCostFood.Text} 石");
         }
 
-        var town = ctx.CreateEntity(F.KindTown, $"在 {hex} 建城（§6.6）");
+        var town = ctx.CreateEntity(F.KindTown, $"在 {hex} 建城（§3.8）");
         string name = cmd.Arg("name").AsString();
         if (string.IsNullOrEmpty(name)) name = DefaultName(ctx, landform);
 
         ctx.Mutate(town.Id, F.TownName, name, "城名：命令给定，缺省按地表起底（不含随机字，回放必然一致）");
         ctx.Mutate(town.Id, F.TownOwner, nation.IsEmpty ? "" : nation.Value,
-            nation.IsEmpty ? "§7.1：允许无附属的独立城镇" : "归属国");
+            nation.IsEmpty ? "§4.1/§6.2：owner 为空 = 独立城镇" : "归属国");
         ctx.Mutate(town.Id, F.TownSovereignty, nation.IsEmpty ? "independent" : "core",
-            "§4.1 治权档位；M1 只写 core / independent，province·vassal·occupied 归 M5 的行政瓶颈");
+            "§4.1 治权档位；M1 只写 core / independent，§6.2 的归属四态与 §6.3 的 AP 打折归 M9");
         ctx.Mutate(town.Id, F.TownTier, "village", "§4.1 规模档：village→town→city→metropolis，升级条件在 M4");
-        ctx.Mutate(town.Id, F.TownFounded, ctx.Time.Turn, "建城回合：§6.6 的冷却与 §12.2 的计时都读它");
+        ctx.Mutate(town.Id, F.TownFounded, ctx.Time.Turn, "建城回合：§3.8 的「每国每 5 年最多新建 1 城」与鬼城回收都要读它（M1 尚无读者）");
         ctx.Mutate(town.Id, F.TownFacility, Fix.One, "第 2 步会重算 Facility，这里先给中性值，免得建城当年读到空");
         ctx.Mutate(town.Id, F.TownSite, hex.Value, "城址：辖地半径、城间距、图层定位都以它为原点");
 
@@ -98,13 +99,13 @@ public static class TownOps
         long tiles = claimed + 1L;                       // 城址 1 格 + 抢占的无主格
         ctx.Mutate(town.Id, F.TownTiles, tiles, $"辖地格数：城址 1 + 抢占 {claimed}（§3.6 上限 {ClaimMaxTiles}）");
 
-        ctx.Mutate(town.Id, F.TownPop("class.peasant"), FoundPop, $"§6.6：建城即有首批人口 {FoundPop * 100} 人");
+        ctx.Mutate(town.Id, F.TownPop("class.peasant"), FoundPop, $"§3.8：建城即有首批人口 {FoundPop * 100} 人");
         ctx.Mutate(town.Id, F.TownSat("class.peasant"), Fix.FromInt(55), "§4.2 满意度初值：基线 50 加一点新开荒的期待");
-        ctx.Mutate(town.Id, F.TownStock("good.food"), FoundStockFood, "开城仓底，§5.6「先有粮才有人」");
+        ctx.Mutate(town.Id, F.TownStock("good.food"), FoundStockFood, "开城仓底，§5.4「先有粮才有人」");
         ctx.Mutate(town.Id, F.TownGrowth("class.peasant"), Fix.Zero, "人口增长的零头累积：不到 100 人不进位");
 
         if (!nation.IsEmpty)
-            ctx.Add(nation, F.NationStockFood, SimValue.Of(-FoundCostFood), $"§5.5 基建：建城成本 {FoundCostFood.Text} 石由国库出");
+            ctx.Add(nation, F.NationStockFood, SimValue.Of(-FoundCostFood), $"§3.8 的建城成本，由 §5.5 的国库支付：{FoundCostFood.Text} 石粮");
 
         ctx.Explain(town.Id, "建城",
             $"辖地 = 半径 {ClaimRadius} 内至多 {ClaimMaxTiles} 格（§3.6）",
@@ -219,7 +220,7 @@ public static class TownOps
             Fix grain = ctx.Data.Get("good.food").GetFix("stockCapPerPop");
             Fix cap = Fix.Mul(grain, TotalPop(ctx, town.Id)) + stockCapBonus;
             ctx.Mutate(town.Id, F.TownStockCap("good.food"), cap,
-                $"仓容 = 人口 × {grain.Text} + 粮仓加成 {stockCapBonus.Text}（§5.6 步 6：剩余物资留仓，仓满即抛）");
+                $"仓容 = 人口 × {grain.Text} + 粮仓加成 {stockCapBonus.Text}（§5.4 步 6：剩余物资留仓，仓满即抛）");
 
             Fix spoil = ctx.Data.Get("good.food").GetFix("spoilage") - spoilageCut;
             ctx.Mutate(town.Id, F.TownSpoilage("good.food"), Fix.Max(spoil, Fix.Zero),

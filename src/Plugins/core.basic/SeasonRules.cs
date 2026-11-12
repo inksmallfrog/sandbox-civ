@@ -68,7 +68,7 @@ public static class SeasonRules
             $"Out = {(soft <= hard ? "人" : "地")}为紧约束 → {gross.Text} 石；仓底 {store.Text} → {(store + gross).Text} 石");
     }
 
-    // ========== 第 10 步 consumption：口粮、满足率、仓满抛洒与损耗（§4.2 s_c、§5.6 步 6）==========
+    // ========== 第 10 步 consumption：口粮、满足率、仓满抛洒与损耗（§4.2 s_c、§5.4 步 6）==========
 
     public static void Consume(EntityId town, HookArgs args, IStepContext ctx)
     {
@@ -91,7 +91,7 @@ public static class SeasonRules
         {
             Fix spilled = left - stockCap;
             ctx.Mutate(town, F.TownStock("good.food"), stockCap,
-                $"仓容 {stockCap.Text} 已满，抛洒 {spilled.Text} 石（§5.6 步 6：剩余物资留仓，仓满即抛）");
+                $"仓容 {stockCap.Text} 已满，抛洒 {spilled.Text} 石（§5.4 步 6：剩余物资留仓，仓满即抛）");
             left = stockCap;
         }
 
@@ -145,7 +145,7 @@ public static class SeasonRules
             ctx.Mutate(town, F.TownStatus(cid), status, "§4.2 三档：>55 服从 / 30–55 抱怨 / <30 反抗");
             if (next < Fix.FromInt(30)) anyRebellious = true;
 
-            ctx.Explain(town, $"{cls.GetStr("title")}满意度（§5.4 公式三）",
+            ctx.Explain(town, $"{cls.GetStr("title")}满意度（§4.2 公式三）",
                 "S* = 基线 + 60(s−e) − 20·税负 + 10·政策 + 10·信仰 − 15·矛盾 + 8·地位",
                 [$"s（口粮满足率）= {s.Text}，e（期望）= {e.Text} ⇒ s−e = {(s - e).Text} ⇒ 60×(s−e) = {premium.Text}",
                  $"基线 = {baseline.Text}（data/core.basic/class.json 的 satisfaction.baseline）",

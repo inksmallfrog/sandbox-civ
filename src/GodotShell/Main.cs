@@ -360,7 +360,7 @@ public partial class Main : Node2D
             Add($"  国库 {nation.GetFix("nation.stock.food", Fix.Zero).Text} 石粮");
         }
         if (_sim.World.OfKind("nation").Count == 0)
-            Add("[color=#8a94a6]还没有国家：建国前建的城是独立城镇（§7.1）。[/color]");
+            Add("[color=#8a94a6]还没有国家：建国前建的城是独立城镇（§4.1 的 owner 可为 null）。[/color]");
 
         if (_selectedTown.Length > 0 && _sim.World.Get(new EntityId(_selectedTown)) is { } town)
         {

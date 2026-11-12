@@ -4,7 +4,7 @@
 #   as=nation.0001   改写提交者（默认 host）
 #   reason=…         改写这条命令的理由，会进因果链
 #
-# hex / town / nation 都可以写 auto：选址规则在 core.basic 的 Siting 里（§6.6 的最小前身），
+# hex / town / nation 都可以写 auto：选址规则在 core.basic 的 Siting 里（§3.8 建城的最小前身），
 # 所以这份脚本换任何种子都成立——sim hash / sim replay 就靠这一点。
 
 1  nation.found       name=魏                 reason=开局
@@ -17,7 +17,7 @@
 7  building.build     town=auto building=def:building.granary        reason=起粮仓压损耗
 8  building.build     town=auto building=def:building.farm hex=auto  reason=第四块田
 
-# 第二座城：验证 §6.6 的间距限制与「国库见底就开不了城」
+# 第二座城：验证 §3.8 的「距最近城镇 ≥ 3 格」与「国库见底就开不了城」
 10 town.found         hex=auto nation=auto            reason=分城
 
 # 之后几年什么都不做：让歉收、损耗与满意度自己演一年，看崩溃线在哪
