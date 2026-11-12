@@ -80,8 +80,22 @@ public readonly struct Fix : IEquatable<Fix>, IComparable<Fix>
         return new(negative ? -r : r);
     }
 
-    /// <summary>long 的绝对值升到 UInt128（能正确表示 long.MinValue，Math.Abs 不能）。</summary>
-    private static UInt128 Abs128(long v) => v < 0 ? UInt128.Zero - (UInt128)(ulong)v : (UInt128)(ulong)v;
+    /// <summary>
+    /// long 的绝对值升到 UInt128（能正确表示 long.MinValue，Math.Abs 不能）。
+    ///
+    /// 坑在这：先把负数升成 UInt128 再取负是<b>错</b>的——
+    /// <c>(UInt128)(ulong)(-97)</c> 是 2^64−97 这个巨大的正数，对它做 128 位减法得到 2^128−2^64+97，
+    /// 而不是 97。所以取负必须在 64 位无符号空间里完成（那里 0−(2^64−97) 回绕成 97，
+    /// 对 long.MinValue 同样给出 2^63），升位之后才是绝对值。
+    /// </summary>
+    private static UInt128 Abs128(long v)
+    {
+        unchecked
+        {
+            ulong u = (ulong)v;
+            return v < 0 ? (UInt128)(0UL - u) : (UInt128)u;
+        }
+    }
 
     /// <summary>a × n（整数倍率，例：人口单位 × 每人产出）。</summary>
     public static Fix Mul(Fix a, long n) => new(checked(a.Raw * n));

@@ -95,6 +95,8 @@ public sealed class DataRegistry
     public const string DefPrefix = "def:";
 
     public int Count => _entries.Count;
+    /// <summary>已加载的数据类型名（升序）。<c>sim check</c> 与数据面板列清单用。</summary>
+    public IReadOnlyList<string> Types => _byType.Keys.OrderBy(k => k, StringComparer.Ordinal).ToList();
     public IReadOnlyDictionary<string, TypeSchema> Schemas => _schemas;
     /// <summary>已加载的数据包名（升序），写进存档做版本核对。</summary>
     public IReadOnlyList<string> LoadedPacks { get; private set; } = Array.Empty<string>();

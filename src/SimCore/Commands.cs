@@ -59,18 +59,25 @@ public sealed class Command
     }
 }
 
-/// <summary>命令受理结果。<see cref="ExecutionRate"/> 是「上令不一定下达」（§7.5）的落点。</summary>
+/// <summary>
+/// 命令受理结果。<see cref="ExecutionRate"/> 是「上令不一定下达」（§7.5）的落点。
+///
+/// 两个文本各有用途：<see cref="CommandText"/> 是人读的（年报的「政令执行」栏），
+/// <see cref="CanonicalText"/> 是机器读的（回放对账、联机校验时报「哪一条命令被驳了」）。
+/// 早先只留 Canonical，年报里就出现了 <c>name=s魏</c> 这种带类型前缀的字——那是哈希格式，不该给人看。
+/// </summary>
 public sealed record CommandResult(
     bool Accepted,
     string CommandText,
+    string CanonicalText,
     string Reason,
     Fix ExecutionRate,
     IReadOnlyList<string> ExplainTerms)
 {
     public static CommandResult Accept(Command c, string why, Fix rate, IReadOnlyList<string>? terms = null) =>
-        new(true, c.Canonical(), why, rate, terms ?? Array.Empty<string>());
+        new(true, c.Text, c.Canonical(), why, rate, terms ?? Array.Empty<string>());
     public static CommandResult Reject(Command c, string why) =>
-        new(false, c.Canonical(), why, Fix.Zero, Array.Empty<string>());
+        new(false, c.Text, c.Canonical(), why, Fix.Zero, Array.Empty<string>());
 }
 
 /// <summary>
@@ -83,7 +90,12 @@ public sealed class CommandBus
     private readonly List<Command> _pending = new();
     private readonly List<Command> _log = new();
     private readonly Dictionary<string, int> _seqByIssuerTurn = new(StringComparer.Ordinal);
-    private ulong _logHash;
+    /// <summary>
+    /// 命令日志的滚动哈希。初值必须是 <see cref="StableHash.FnvOffset"/>，和
+    /// <c>Restore</c> 里的重置值一致——否则「一口气跑到第 N 回合」和「读第 N 回合的档」
+    /// 算出的 LogHash 天生就差一个初值，§10.6 的等价性自检永远过不了。
+    /// </summary>
+    private ulong _logHash = StableHash.FnvOffset;
 
     public IReadOnlyList<Command> Pending => _pending;
     /// <summary>完整命令日志：回放的输入，存档的一部分（§10.6）。</summary>

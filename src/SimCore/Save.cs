@@ -180,6 +180,7 @@ public static class SaveStore
     }
 
     private static readonly System.Globalization.CultureInfo CultureInfo = System.Globalization.CultureInfo.InvariantCulture;
+    private static readonly System.Text.UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>把存档写成文件：GZip 压缩 + 原子替换 + .bak 保留。</summary>
     public static void Write(string path, SaveGame save, string? note = null)
@@ -191,7 +192,9 @@ public static class SaveStore
 
         using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write))
         using (var gz = new GZipStream(fs, CompressionLevel.Optimal))
-        using (var sw = new StreamWriter(gz, System.Text.Encoding.UTF8))
+        // 必须是无 BOM 的 UTF-8：System.Text.Encoding.UTF8 会先吐 EF BB BF，
+        // 而 JSON 解析器把 BOM 当成值的开头，于是刚写出来的档自己读不回来。
+        using (var sw = new StreamWriter(gz, Utf8NoBom))
             sw.Write(json);
 
         // 临时文件必须能读回来，否则不动正式档
@@ -253,6 +256,10 @@ public static class SaveStore
         else json = raw;
 
         if (json.Length == 0) throw new SimSaveException($"{Path.GetFileName(path)} 是空文件");
+        // 容忍带 BOM 的档（手写的测试夹具、Windows 编辑器另存的明文 JSON）：
+        // 跳过那 3 个字节，否则解析器报「0xEF 不是合法的值的开头」。
+        if (json.Length >= 3 && json[0] == 0xEF && json[1] == 0xBB && json[2] == 0xBF)
+            json = json.AsSpan(3).ToArray();
         return json;
     }
 

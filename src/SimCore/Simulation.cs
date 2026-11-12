@@ -482,9 +482,17 @@ public sealed partial class Simulation
 
         var recomputed = StateHash.Compute(World, Commands, Rng);
         if (save.SnapshotHash.Length > 0 && recomputed.Total != save.SnapshotHash)
+        {
+            // 把三样输入并排打出来：字段数（快照漏/多字段）、命令日志哈希（初值或顺序不幂等）、
+            // RNG 状态（流没进档、或读档后多取了一个数）。少了这一步，等价性自检失败只能靠猜。
+            int savedFields = 0;
+            foreach (var e in save.Entities) savedFields += e.Fields.Count;
             throw new SimSaveException(
-                $"读档后状态哈希不一致：档内 {save.SnapshotHash} vs 现算 {recomputed.Total}。" +
-                "可能原因：迁移器漏字段、插件数据与写档时不同、或档损坏。请对比同名 .bak。");
+                $"读档后状态哈希不一致：档内 {save.SnapshotHash} vs 现算 {recomputed.Total}。\n" +
+                $"  实体 {save.Entities.Count} / 字段 档内 {savedFields} vs 现算 {recomputed.FieldCount}；" +
+                $"命令日志 {Commands.LogHash}；全局 RNG {Rng.Global.State:x16}；回合 {save.Turn}。\n" +
+                "  可能原因：迁移器漏字段、插件数据与写档时不同、或档损坏。请对比同名 .bak。");
+        }
         return this;
     }
 
