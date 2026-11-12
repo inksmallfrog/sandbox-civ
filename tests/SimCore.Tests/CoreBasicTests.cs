@@ -267,6 +267,41 @@ public class CoreBasicTests
         Assert.True(prev > start, $"18 年丰年人口没长（{start} → {prev}）");
     }
 
+    /// <summary>
+    /// 「饿而不死」那一档的定点回归。附录 A §8 的 0.04·粮安 在 s = 0.60 时只有 0.008，
+    /// 先物化增长率再乘 P 会被 ×100 刻度截成 0，人口从此永久冻死在地块上限上
+    /// （seed 42 的 200 年基线在第 83 年卡在 72 个百人单位，就是这个坑）。
+    /// 判据用「第 13 步有没有往零头桶里写东西」，而不是只看年末人口——不进位的年份人口本来就不动。
+    /// </summary>
+    [Fact]
+    public void 缺粮但不至于饿死时零头桶照样在涨()
+    {
+        var sim = OneTown(37);
+        for (int turn = 1; turn <= 40; turn++) sim.AdvanceTurn();
+        var town = Town(sim);
+        long pop = town.GetInt(F.TownPop("class.peasant"));
+        Assert.True(pop >= 12, $"40 年丰年只长到 {pop} 个百人单位，靶心没对上（要的是 P × 0.04·粮安 < 0.01 的量级）");
+
+        // 辖地压成「只够六成口粮」，仓底清空 ⇒ 实得 = 本年产出 = 0.60 × 需求
+        Fix want = Fix.Mul(sim.Data.Get("class.peasant").GetFix("consumes.food"), pop);
+        Fix supply = Fix.FromRaw(want.Raw * 6 / 10);
+        var tiles = Tiles(sim, town.Id);
+        for (int i = 0; i < tiles.Count; i++)
+            sim.World.WriteRaw(tiles[i].Id, F.HexYieldFood, SimValue.Of(i == 0 ? supply : Fix.Zero));
+        sim.World.WriteRaw(town.Id, F.TownStock("good.food"), SimValue.Of(Fix.Zero));
+
+        var r = sim.AdvanceTurn();
+        Fix ration = town.GetFix(F.TownRation("class.peasant"), Fix.Zero);
+        Assert.Equal(Fix.FromPercent(60), ration);                       // s = 0.60 ⇒ 粮安 = 0.20 > 0，该长人
+
+        var bucket = r.Diffs.FirstOrDefault(d => d.Id == town.Id && d.Path == F.TownGrowth("class.peasant"));
+        Assert.True(bucket != default,
+            $"s = {ration.Text}（粮安 0.20）时第 13 步一笔变更都没写：0.04·粮安 = 0.008 被 1/100 刻度截成 0，" +
+            "人口会永久冻死（附录 A §8 要的是 ΔP = P × 粮安 × 4 ÷ 100，先乘 P）");
+        Fix grew = SimValue.ParseCanonical(bucket.After).AsFix() - SimValue.ParseCanonical(bucket.Before).AsFix();
+        Assert.True(grew > Fix.Zero, $"零头桶只加了 {grew.Text}，s = {ration.Text} 时应为 0.04 × 粮安 × P > 0");
+    }
+
     [Fact]
     public void 灾年先断粮再减员最后反抗()
     {

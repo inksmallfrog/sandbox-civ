@@ -170,6 +170,11 @@ public static class SeasonRules
     /// 粮安 = <c>clamp(2s−1, −1, 1)</c>：刚好糊口算 0，有余粮才为正，缺粮为负——
     /// 于是歉收真的会减员，而不是 GDD 反复警告的「无人口自动产出」那类 bug。
     /// 拥挤/疫病/医疗在 M3/M7 接入，这里显式按 0 写进 Explain。
+    ///
+    /// 定点的一条硬规矩：<b>小于 0.01 的量绝不先物化再相乘</b>。0.04·粮安 在缺粮年份是
+    /// 0.00xx，×100 定点会把中间量直接截成 0.00，人口就此冻死；所以这里写成 P × 粮安 × 4 ÷ 100，
+    /// 只在最后截断一次。同理，M3 接「拥挤/疫病/医疗」时也要往这个乘积里加项，
+    /// 不许先算出年增长率再乘 P。
     /// </summary>
     public static void Demography(EntityId town, HookArgs args, IStepContext ctx)
     {
@@ -181,8 +186,12 @@ public static class SeasonRules
 
             Fix ration = ctx.GetFix(town, F.TownRation(cid), Fix.Zero);
             Fix secure = (Fix.Mul(ration, Fix.FromInt(2)) - Fix.One).Clamp(Fix.MinValue, Fix.One);
-            Fix rate = Fix.Mul(Fix.FromPercent(4), secure);      // 0.04 × 粮安；其余三项 M1 为 0
-            Fix delta = Fix.Mul(Fix.FromInt(pop), rate);
+            // 0.04·粮安 只有 0.00xx 的量级，别把它先物化出来：×100 定点下 s ≤ 0.62 时
+            // 0.04×粮安 正好截成 0.00，再乘人口还是 0，于是人口永远冻在地块上限上
+            // （seed 42 跑到第 83 年 72 个百人单位之后一动不动 117 年，就是这么来的）。
+            // 把 P 先乘进去，全程只在最后截断一次：ΔP = P × 粮安 × 4 ÷ 100。
+            // 其余三项（拥挤 / 疫病 / 医疗）M1 为 0，接入后同样按「先乘 P」的写法加进来。
+            Fix delta = Fix.Div(Fix.Mul(Fix.Mul(Fix.FromInt(pop), 4), secure), 100);
 
             // 零头累积。两个坑都踩过，所以这一段写得格外明白：
             // 1) 必须先落账再取整数。只在「进了位」的那年才写回 carry 的话，
@@ -205,7 +214,7 @@ public static class SeasonRules
                 "ΔP = P × (0.04·粮安 − 0.03·拥挤 − 0.02·疫病 + 0.01·医疗)",
                 [$"P = {pop}，s = {ration.Text} ⇒ 粮安 = clamp(2s−1) = {secure.Text}",
                  "拥挤 / 疫病 / 医疗 = 0（M3 的市场、M7 的宗教接入）",
-                 $"⇒ 增长率 {rate.Text}/年 ⇒ ΔP = {delta.Text} 个百人单位，累积零头后本年净 {applied}"],
+                 $"⇒ ΔP = {pop} × {secure.Text} × 4% = {delta.Text} 个百人单位（先乘 P 再取百分比，免得 0.00xx 落在 1/100 刻度上归零），累积零头后本年净 {applied}"],
                 $"{cls.GetStr("title")}人口 {pop} → {after}（{(applied >= 0 ? "增" : "减")}{Math.Abs(applied) * 100} 人）");
         }
     }
