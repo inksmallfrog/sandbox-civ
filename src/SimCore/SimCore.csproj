@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SimCore —— 模拟内核（GDD §10.2 / ADR-003）
+  红线：只能依赖 System.*。不得引用 Godot、不得引用任何插件、不得引用 UI。
+  违反 = 打回（§10.1 纪律、§14 风险「联机返工」）。
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SimCore</RootNamespace>
+    <AssemblyName>SimCore</AssemblyName>
+  </PropertyGroup>
+</Project>

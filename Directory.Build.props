@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  本仓库的 .NET 通用属性。
+  纪律（GDD §10.1 / §10.7）：
+    - 所有模拟代码 TargetFramework = net8.0（与 Godot 4.x mono 的 GodotSharp lib/net8.0 对齐）。
+    - SimCore 与插件不得引用任何 NuGet 第三方包；只允许 System.*。
+    - 未使用可空警告一律升级，保证跨 AI 交接时的签名清晰。
+-->
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors>NU1503</WarningsNotAsErrors>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Deterministic>true</Deterministic>
+    <NoWarn>CA1416</NoWarn>
+    <!-- 仓库根 = 往上找第一个 Directory.Build.props 所在目录（带尾斜杠，插件用 $(RepoRoot)build\plugins\ 落产物）。 -->
+    <_RepoRootRaw Condition="'$(_RepoRootRaw)' == ''">$([MSBuild]::GetDirectoryNameOfFileAbove($(MSBuildProjectDirectory), 'Directory.Build.props'))</_RepoRootRaw>
+    <_RepoRootRaw Condition="'$(_RepoRootRaw)' == ''">$(MSBuildThisFileDirectory)</_RepoRootRaw>
+    <RepoRoot>$([MSBuild]::EnsureTrailingSlash($(_RepoRootRaw)))</RepoRoot>
+  </PropertyGroup>
+</Project>

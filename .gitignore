@@ -1,0 +1,31 @@
+# ---- .NET ----
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+artifacts/
+
+# ---- 构建产物：插件落地目录（由 dotnet build 生成）----
+build/
+
+# ---- Godot ----
+.godot/
+*.translation
+GodotSharp/
+mono_out/
+
+# ---- 运行时产物 ----
+saves/*
+!saves/.gitkeep
+reports/
+*.csv.tmp
+
+# ---- 模拟输出（基线报告单独归档，见 docs/BALANCE.md）----
+analysis/out/
+
+# ---- 杂项 ----
+*.log
+.DS_Store
+Thumbs.db
