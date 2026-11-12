@@ -64,7 +64,7 @@ public static class TownOps
         foreach (var t in ctx.EntitiesOfKind(F.KindTown))
         {
             EntityId site = F.IdOf(ctx.GetStr(t.Id, F.TownSite));
-            if (site.IsEmpty || !ctx.Has(site)) continue;   // 城址丢了就不比，交给不变量 basic.town_site 报出来
+            if (site.IsEmpty || !ctx.Has(site)) continue;   // 城址丢了就不比，交给不变量 basic.ranges 的「城址不存在/双向引用不一致」报出来
             var (q, r) = MapGen.Coords(site);
             int d = MapGen.Distance(q - hq, r - hr);
             if (d < MinTownSpacing)
