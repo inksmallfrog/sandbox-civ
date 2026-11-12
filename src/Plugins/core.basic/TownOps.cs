@@ -29,11 +29,21 @@ public static class TownOps
     /// <summary>开城仓底（粮）。</summary>
     public static readonly Fix FoundStockFood = Fix.FromInt(8);
 
-    /// <summary><c>town.found</c>：args = hex（地块）、name（可省）、nation（可省 = 独立城镇，§7.1）。</summary>
+    /// <summary>
+    /// <c>town.found</c>：args = hex（地块或 <c>auto</c>）、name（可省）、nation（可省 = 独立城镇，§7.1；也可写 <c>auto</c> = 第一个国家）。
+    ///
+    /// <c>hex=auto</c> 是给脚本、标定与 AI 托管用的：命令必须能被<b>与种子无关</b>地写出来，
+    /// 选址规则本身也是玩法知识，所以放在 <see cref="Siting"/> 里而不是壳层（§10.1）。
+    /// </summary>
     public static CommandResult Found(Command cmd, IStepContext ctx)
     {
         EntityId hex = F.Id(cmd.Arg("hex"));
-        if (hex.IsEmpty) return CommandResult.Reject(cmd, "建城要指定地块：town.found{hex=…}");
+        if (Siting.IsAuto(hex))
+        {
+            hex = Siting.BestTownSite(ctx, out string why);
+            if (hex.IsEmpty) return CommandResult.Reject(cmd, $"自动选址失败：{why}");
+        }
+        if (hex.IsEmpty) return CommandResult.Reject(cmd, "建城要指定地块：town.found{hex=…} 或 hex=auto");
         if (!ctx.Has(hex)) return CommandResult.Reject(cmd, $"{hex} 在地图上不存在");
 
         if (!ctx.Data.TryGet(ctx.GetStr(hex, F.HexLandform), out var landform))
@@ -46,6 +56,7 @@ public static class TownOps
             return CommandResult.Reject(cmd, $"{hex} 已是 {ctx.GetStr(hex, F.HexOwner)} 的辖地，辖地不重叠");
 
         EntityId nation = F.Id(cmd.Arg("nation"));
+        if (Siting.IsAuto(nation)) nation = FirstEntityOf(ctx, F.KindNation);
         if (!nation.IsEmpty && !ctx.Has(nation))
             return CommandResult.Reject(cmd, $"{nation} 这个国家不存在");
 
@@ -108,18 +119,20 @@ public static class TownOps
     }
 
     /// <summary>
-    /// <c>building.build</c>：args = town、building（<c>def:</c> 或裸 id）、hex（地块类建筑必填）。
+    /// <c>building.build</c>：args = town（或 <c>auto</c> = 第一座城）、building（<c>def:</c> 或裸 id）、
+    /// hex（地块类建筑必填，也可写 <c>auto</c> 让规则包在辖地里选址）。
     /// 营造本身不进结算——它只改等级，第 2 步负责把等级折算成设施系数（§2.3 的分工）。
     /// </summary>
     public static CommandResult Build(Command cmd, IStepContext ctx)
     {
         EntityId town = F.Id(cmd.Arg("town"));
-        if (town.IsEmpty || !ctx.Has(town)) return CommandResult.Reject(cmd, "building.build 需要一个存在的 town");
+        if (Siting.IsAuto(town)) town = FirstEntityOf(ctx, F.KindTown);
+        if (town.IsEmpty || !ctx.Has(town)) return CommandResult.Reject(cmd, "building.build 需要一个存在的 town（或 town=auto）");
 
-        string defId = F.BareId(cmd.Arg("building").AsString());
+        string defId = F.BareId(cmd.ArgStr("building"));
         if (defId.Length == 0 || !ctx.Data.TryGet(defId, out var def))
-            return CommandResult.Reject(cmd, $"营造目标 '{cmd.Arg("building").AsString()}' 不是已知建筑（type=building）");
-        if (def.Type != "building")
+            return CommandResult.Reject(cmd, $"营造目标 '{cmd.ArgStr("building")}' 不是已知建筑（type=building）");
+        if (def.Type != F.TypeBuilding)
             return CommandResult.Reject(cmd, $"{defId} 是 {def.Type}，不是建筑");
 
         bool onHex = def.GetStr("slot") == "hex";
@@ -127,8 +140,9 @@ public static class TownOps
         if (onHex)
         {
             hex = F.Id(cmd.Arg("hex"));
+            if (Siting.IsAuto(hex)) hex = Siting.BestBuildingHex(ctx, town, def.Id);
             if (hex.IsEmpty || !ctx.Has(hex))
-                return CommandResult.Reject(cmd, $"{def.GetStr("title")} 盖在地块上，必须给 hex");
+                return CommandResult.Reject(cmd, $"{def.GetStr("title")} 盖在地块上，必须给 hex（或 hex=auto 让规则包在辖地里挑一格）");
             if (F.IdOf(ctx.GetStr(hex, F.HexOwner)) != town)
                 return CommandResult.Reject(cmd, $"{hex} 不在 {ctx.GetStr(town, F.TownName)} 的辖地里");
         }
@@ -214,6 +228,13 @@ public static class TownOps
     }
 
     // ---- 工具 ----
+
+    /// <summary>某 kind 的第一个实体 id（<c>auto</c> 参数的落点）。EntitiesOfKind 已按 id 升序，所以结果确定。</summary>
+    private static EntityId FirstEntityOf(IStepContext ctx, string kind)
+    {
+        foreach (var e in ctx.EntitiesOfKind(kind)) return e.Id;
+        return default;
+    }
 
     /// <summary>辖地抢占：按（离城址的距离，地块 id）升序取前 N 个无主格。排序键唯一 ⇒ 结果唯一（§10.7 纪律 1）。</summary>
     private static int ClaimTiles(IStepContext ctx, EntityId center, EntityId town)

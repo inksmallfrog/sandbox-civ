@@ -129,9 +129,9 @@ public static class SeasonRules
             Fix sat = ctx.GetFix(town, F.TownSat(cid), Fix.FromInt(50));
             Fix s = ctx.GetFix(town, F.TownRation(cid), Fix.Zero);
             Fix e = cls.GetFix("satisfaction.expects");
-            Fix star = Fix.FromInt((int)cls.GetInt("satisfaction.baseline", 50))
-                       + Fix.Mul(Fix.FromInt(60), s - e);       // 其余四项 M1 为 0
-            star = star.Clamp(Fix.Zero, Hundred);
+            Fix baseline = Fix.FromInt((int)cls.GetInt("satisfaction.baseline", 50));
+            Fix premium = Fix.Mul(Fix.FromInt(60), s - e);       // 60(s−e)：其余四项 M1 为 0
+            Fix star = (baseline + premium).Clamp(Fix.Zero, Hundred);
 
             var stream = ctx.Rng.Stream(town, $"satisfaction.{F.Bare(cid)}.T{ctx.Time.Turn}");
             Fix xi = stream.NextGaussian(Fix.Zero, Fix.FromInt(2));   // ξ ~ N(0, 2)（§4.2）
@@ -146,12 +146,13 @@ public static class SeasonRules
             if (next < Fix.FromInt(30)) anyRebellious = true;
 
             ctx.Explain(town, $"{cls.GetStr("title")}满意度（§5.4 公式三）",
-                "S* = 50 + 60(s−e) − 20·税负 + 10·政策 + 10·信仰 − 15·矛盾 + 8·地位",
-                [$"s（口粮满足率）= {s.Text}，e（期望）= {e.Text} ⇒ 60×(s−e) = {(s - e).Text} × 60",
-                 $"基线 50；税负/政策/信仰/矛盾/地位 = 0（M4·M5·M7·M4·M8 接入）",
+                "S* = 基线 + 60(s−e) − 20·税负 + 10·政策 + 10·信仰 − 15·矛盾 + 8·地位",
+                [$"s（口粮满足率）= {s.Text}，e（期望）= {e.Text} ⇒ s−e = {(s - e).Text} ⇒ 60×(s−e) = {premium.Text}",
+                 $"基线 = {baseline.Text}（data/core.basic/class.json 的 satisfaction.baseline）",
+                 "税负 / 政策 / 信仰 / 矛盾 / 地位 = 0（M4·M5·M7·M4·M8 接入）",
                  $"⇒ S* = {star.Text}，本年 S = {sat.Text}",
                  $"收敛 0.35(S*−S) = {pull.Text}，噪声 ξ ~ N(0,2) = {xi.Text}",
-                 $"状态「{status}」"],
+                 $"状态「{status}」（>55 服从 / 30–55 抱怨 / <30 反抗）"],
                 $"S ← {next.Text}（clamp 0–100）");
         }
 
@@ -180,17 +181,24 @@ public static class SeasonRules
 
             Fix ration = ctx.GetFix(town, F.TownRation(cid), Fix.Zero);
             Fix secure = (Fix.Mul(ration, Fix.FromInt(2)) - Fix.One).Clamp(Fix.MinValue, Fix.One);
-            Fix rate = Fix.Div(Fix.Mul(Fix.FromInt(4), secure), Hundred);   // 0.04 × 粮安
+            Fix rate = Fix.Mul(Fix.FromPercent(4), secure);      // 0.04 × 粮安；其余三项 M1 为 0
             Fix delta = Fix.Mul(Fix.FromInt(pop), rate);
 
-            // 零头累积：不满一个百人单位（100 人）不进位，否则人口会凭空跳涨
-            Fix carry = ctx.GetFix(town, F.TownGrowth(cid), Fix.Zero) + delta;
-            long heads = carry.FloorToInt();
-            if (heads != 0) ctx.AddFix(town, F.TownGrowth(cid), -Fix.FromInt(heads), "零头结算：进出人口后扣掉整数部分");
+            // 零头累积。两个坑都踩过，所以这一段写得格外明白：
+            // 1) 必须先落账再取整数。只在「进了位」的那年才写回 carry 的话，
+            //    没进位的年份增量会被整年丢掉，人口永远涨不起来（§10.7 纪律 4：派生量也要留痕）。
+            // 2) 取整用「向零截断」而不是 floor：floor(-0.16) = -1，
+            //    一场小歉收就会凭空抹掉一个百人单位 = 100 人，方向完全错。
+            ctx.AddFix(town, F.TownGrowth(cid), delta, $"第 13 步增长量 {delta.Text} 个百人单位，先进零头桶");
+            Fix carry = ctx.GetFix(town, F.TownGrowth(cid), Fix.Zero);
+            long heads = carry.Raw / Fix.Scale;                 // 向零截断
             if (heads == 0) continue;
 
+            ctx.AddFix(town, F.TownGrowth(cid), -Fix.FromInt(heads), "零头结算：进出人口后扣掉整数部分");
             long after = Math.Max(0, pop + heads);
             long applied = after - pop;
+            if (applied != heads)
+                ctx.AddFix(town, F.TownGrowth(cid), Fix.FromInt(heads - applied), "减到 0 为止，剩下的零头退回桶里");
             ctx.AddInt(town, F.TownPop(cid), applied, $"第 13 步人口 {pop} → {after} 个百人单位（附录 A §8）");
 
             ctx.Explain(town, "人口变动（附录 A §8）",
