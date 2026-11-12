@@ -77,6 +77,11 @@ public static class Runner
 
         Console.WriteLine("结算顺序（docs/SIM_ORDER.md 的生成源）");
         foreach (var line in SimOrder.Describe()) Console.WriteLine($"  {line}");
+
+        // PLUGIN_API.md 的 hook 表同理：文档里那几行必须能由代码重新打出来，
+        // 否则「改了 SimOrder 忘了改文档」会静默发生，而插件作者正是照这张表排先后的。
+        Console.WriteLine("hook 落点（docs/PLUGIN_API.md 的生成源）");
+        foreach (var line in SimOrder.DescribeHookMap()) Console.WriteLine($"  {line}");
         return 0;
     }
 

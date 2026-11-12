@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "api": "1.0",
   "dependencies": [],
-  "loadPriority": 10,
+  "load_priority": 10,
   "dll": "core.basic.dll",
-  "enabledByDefault": true,
+  "enabled_by_default": true,
   "title": "基础规则包",
   "summary": "六边形地图、农民、粮食、建城、回合、存档——用来证明 Core 独立可跑的最小循环。",
-  "dataPacks": ["core.basic"]
+  "data_packs": ["core.basic"]
 }

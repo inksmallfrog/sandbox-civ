@@ -57,24 +57,81 @@ public sealed class PluginManifest
 
     public string EffectiveDll => string.IsNullOrEmpty(Dll) ? Id + ".dll" : Dll;
 
+    /// <summary>manifest 认得的键（以 <c>@</c> 开头的除外，那是给人读的注释字段）。</summary>
+    private static readonly HashSet<string> KnownKeys = new(StringComparer.Ordinal)
+    {
+        "id", "version", "api", "dependencies", "load_priority", "dll",
+        "enabled_by_default", "title", "summary", "data_packs"
+    };
+
     public static PluginManifest? TryRead(string path)
     {
+        // 为什么要有 UnknownKeys 这一关：deserialize 对认不出的键是「跳过」而不是「报错」，
+        // 于是 "loadPriority"（驼峰）会被静默丢掉、priority 落回默认 100，插件照样加载——
+        // 一个永远改不动的优先级、一个怎么也带不上的数据包，查起来极其费劲。拼错必须当场炸。
+        string text;
         try
         {
-            var opt = new JsonSerializerOptions
-            {
-                ReadCommentHandling = JsonCommentHandling.Skip,
-                AllowTrailingCommas = true,
-                PropertyNameCaseInsensitive = false
-            };
-            return JsonSerializer.Deserialize<PluginManifest>(File.ReadAllText(path), opt);
+            text = File.ReadAllText(path);
         }
         catch (Exception e)
         {
-            throw new SimPluginException(
-                Path.GetDirectoryName(path) is { } d ? Path.GetFileName(d) : "?",
-                $"manifest.json 解析失败：{e.Message}");
+            throw new SimPluginException(DirName(path), $"manifest.json 读不到：{e.Message}");
         }
+
+        var opt = new JsonSerializerOptions
+        {
+            ReadCommentHandling = JsonCommentHandling.Skip,
+            AllowTrailingCommas = true,
+            PropertyNameCaseInsensitive = false
+        };
+
+        PluginManifest? manifest;
+        try
+        {
+            manifest = JsonSerializer.Deserialize<PluginManifest>(text, opt);
+        }
+        catch (Exception e)
+        {
+            throw new SimPluginException(DirName(path), $"manifest.json 解析失败：{e.Message}");
+        }
+        if (manifest is null)
+            throw new SimPluginException(DirName(path), "manifest.json 是空的");
+
+        var bad = UnknownKeys(text);
+        if (bad.Count > 0)
+            throw new SimPluginException(manifest.Id.Length > 0 ? manifest.Id : DirName(path),
+                "manifest.json 有不认识的键：" + string.Join(", ", bad) +
+                $"（合法键：{string.Join(", ", KnownKeys)}；注释用 @ 开头的键或 // 行注释）");
+
+        return manifest;
+    }
+
+    private static string DirName(string path) =>
+        Path.GetDirectoryName(path) is { } d ? Path.GetFileName(d) : "?";
+
+    /// <summary>根对象里不在 <see cref="KnownKeys"/> 且不以 <c>@</c> 开头的键。JSON 本身坏掉时返回空（让反序列化去报）。</summary>
+    private static List<string> UnknownKeys(string json)
+    {
+        var bad = new List<string>();
+        try
+        {
+            var docOpt = new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            };
+            using var doc = JsonDocument.Parse(json, docOpt);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return bad;
+            foreach (var p in doc.RootElement.EnumerateObject())
+                if (p.Name.Length == 0 || (p.Name[0] != '@' && !KnownKeys.Contains(p.Name)))
+                    bad.Add(p.Name);
+        }
+        catch (JsonException)
+        {
+            // 语法本身就不对：上面反序列化那关已经报过（或马上要报），这里不重复报
+        }
+        return bad;
     }
 
     public string ToJson() => JsonSerializer.Serialize(this, new JsonSerializerOptions

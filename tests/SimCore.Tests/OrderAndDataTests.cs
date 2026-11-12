@@ -220,6 +220,26 @@ public class OrderAndDataTests
         Assert.Throws<SimPluginException>(() => host.Plan(t.Path));
     }
 
+    /// <summary>
+    /// 键名写错必须当场炸。反序列化对认不出的键默认是「跳过」，于是 <c>loadPriority</c>（驼峰）
+    /// 会静默落回默认 100、<c>dataPacks</c> 落回空表——插件照样加载，只是声明全废。
+    /// M1 真踩过：core.basic 的清单就是这么写了三个月的驼峰，直到 sim check 打出 priority=100 才发现。
+    /// </summary>
+    [Fact]
+    public void 清单键名拼错就拒载而不是静默落回默认值()
+    {
+        using var t = new TmpDir("plugin-camel");
+        MakePluginDir(t, "x.one", """{ "id": "x.one", "version": "1.0.0", "api": "1.0", "loadPriority": 10 }""");
+        var e = Assert.Throws<SimPluginException>(() => new PluginHost().Plan(t.Path));
+        Assert.Contains("不认识的键", e.Message, StringComparison.Ordinal);
+        Assert.Contains("loadPriority", e.Message, StringComparison.Ordinal);
+
+        // 以 @ 开头的键是给人看的注释字段，合法（core.basic 的清单里就有 @comment）
+        using var ok = new TmpDir("plugin-comment");
+        MakePluginDir(ok, "y.one", """{ "@comment": "说明", "id": "y.one", "version": "1.0.0", "api": "1.0" }""");
+        Assert.Equal(new[] { "y.one" }, new PluginHost().Plan(ok.Path).Select(d => d.Manifest.Id).ToArray());
+    }
+
     [Fact]
     public void 仓库里真的装着core_basic()
     {
@@ -229,6 +249,13 @@ public class OrderAndDataTests
         Assert.Contains("core.basic", sim.Plugins.Ids());
         Assert.NotEmpty(sim.Data.OfType(F.TypeClass));
         Assert.Contains(sim.StartupLog, l => l.Contains("core.basic", StringComparison.Ordinal));
+
+        // 清单里写的东西必须真的绑定上，而不是解析成功但全是默认值。
+        var m = sim.Plugins.Find("core.basic")!.Manifest;
+        Assert.Equal(10, m.LoadPriority);
+        Assert.Contains("core.basic", m.DataPacks);
+        Assert.True(m.EnabledByDefault);
+        Assert.NotEmpty(m.Title);
     }
 }
 
