@@ -1,0 +1,21 @@
+{
+  "@comment": [
+    "GDD §3.2 地表表的首批 5 行（平原/草原/森林/丘陵/山地），数值照抄该表。",
+    "潜力是产能上限，不是白拿的产出：没有人口与设施，地块不生钱（§3.2 的提醒）。",
+    "M1 未接形胜（§3.4）与资源（§3.5），所以 Y = 地表潜力本身；水利系数暂为 1.00，M2 的河流会把它换成 1.15。",
+    "color 给壳层上色用，模拟不读它——渲染参数写在数据里，改配色不用改代码。"
+  ],
+  "type": "landform",
+  "entries": [
+    { "id": "landform.plain",     "title": "平原", "@note": "最佳农地与建城地",
+      "potential.food": 3.00, "potential.mat": 0.00, "moveCost": 1, "defense": 0, "buildable": true,  "color": "#8fbf5a" },
+    { "id": "landform.grassland", "title": "草原", "@note": "农牧兼备，骑兵适地",
+      "potential.food": 2.00, "potential.mat": 1.00, "moveCost": 1, "defense": 0, "buildable": true,  "color": "#c3d06a" },
+    { "id": "landform.forest",    "title": "森林", "@note": "伐木，步兵隐蔽",
+      "potential.food": 1.00, "potential.mat": 3.00, "moveCost": 2, "defense": 1, "buildable": true,  "color": "#4f874a" },
+    { "id": "landform.hill",      "title": "丘陵", "@note": "矿脉高发，远程视野 +1",
+      "potential.food": 1.00, "potential.mat": 2.00, "moveCost": 2, "defense": 1, "buildable": true,  "color": "#a08a5a" },
+    { "id": "landform.mountain",  "title": "山地", "@note": "屏障，仅隘口/山谷可穿",
+      "potential.food": 0.00, "potential.mat": 3.00, "moveCost": 4, "defense": 2, "buildable": false, "color": "#6d6a72" }
+  ]
+}

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    core.basic —— 内置参考规则包（GDD §10.2 职责 8：它可被关掉，用来证明 Core 不带玩法也能跑）。
+    它和未来的 eco.* / mil.war 完全同级：只用 IPluginApi 与 IStepContext。
+    一旦出现「这条规则好像该写进 SimCore」的冲动，说明该改的是这里，不是内核。
+
+    产出双份：
+      1) build/plugins/core.basic/ —— 给 Simulation 按目录加载（CLI / Godot 走这条路）；
+      2) 常规 bin 输出 —— 给 xUnit 直接引用程序集做单元测试。
+    Private=false：SimCore 由宿主进程先加载，插件目录里不留第二份，避免同名程序集被装两遍。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>CoreBasic</RootNamespace>
+    <AssemblyName>core.basic</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\SimCore\SimCore.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="manifest.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="PublishToPluginDir" AfterTargets="PostBuildEvent">
+    <PropertyGroup>
+      <PluginOut>$(RepoRoot)build\plugins\core.basic\</PluginOut>
+    </PropertyGroup>
+    <MakeDir Directories="$(PluginOut)" />
+    <Copy SourceFiles="$(TargetPath);manifest.json" DestinationFolder="$(PluginOut)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

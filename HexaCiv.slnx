@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SimCore/SimCore.csproj" />
+    <Project Path="src/Plugins/core.basic/core.basic.csproj" />
   </Folder>
 </Solution>

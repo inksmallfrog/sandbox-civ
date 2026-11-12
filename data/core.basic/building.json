@@ -1,0 +1,24 @@
+{
+  "@comment": [
+    "GDD §5.7 数值基线里的建筑起点。M1 只放两种：农田（进设施系数）、粮仓（降损耗、加仓容）。",
+    "slot 概念照 §3.7 第 5 步：hex = 盖在地块上（辖地内），town = 盖在城镇本体上。",
+    "facility 即 §4.2 的 Facility = 1 + 0.15 × 产业设施等级；这里是每级的增量，农田用 0.15，上限 3 级正好 1.45。",
+    "维护费照 §5.5「建筑造价的 20%/年」；M4 的国库才会真的扣银，M1 先只算粮。"
+  ],
+  "type": "building",
+  "entries": [
+    { "id": "building.farm", "title": "农田", "slot": "hex",
+      "cost.food": 2.00, "upgradeCost.food": 3.00, "maxLevel": 3,
+      "facility": 0.15, "maintenance.food": 0.40, "requiresPop": 2,
+      "@note": "把地块潜力真正变现的东西；改良不进 Y，进设施系数（§3.6）" },
+    { "id": "building.granary", "title": "粮仓", "slot": "town",
+      "cost.food": 4.00, "upgradeCost.food": 6.00, "maxLevel": 2,
+      "stockCap": 20.00, "spoilageCut": 0.02, "maintenance.food": 0.80, "requiresPop": 4,
+      "@note": "粮年损耗 5%，每级粮仓 −2%（§5.7）；仓容 +20 石/级" },
+    { "id": "building.workshop", "title": "作坊", "slot": "town",
+      "cost.food": 6.00, "upgradeCost.food": 8.00, "maxLevel": 3,
+      "facility": 0.10, "maintenance.food": 1.20, "requiresPop": 6,
+      "requiresBuilding": "def:building.farm",
+      "@note": "工人阶级的解锁前提（§4.4）；M3 才真正产出器，这里先占住数据位" }
+  ]
+}

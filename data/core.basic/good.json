@@ -1,0 +1,25 @@
+{
+  "@comment": [
+    "GDD §5.1 的商品表。M1 只接粮与银：银是计价单位，不参与价格求解（§5.1 脚注）。",
+    "basePrice 照抄 §5.1 表；粮仓容与损耗见 §6 步 6 与 §5.6：剩余物资留仓，粮每年损耗 5%，粮仓每级再减 2%。",
+    "料/器/奢 的 basePrice 一并给齐，M3 的价格求解器不用回头补数据。"
+  ],
+  "type": "good",
+  "entries": [
+    { "id": "good.food",   "title": "粮", "unit": "石", "basePrice": 4.00,
+      "stockCapPerPop": 2.00, "spoilage": 0.05, "essential": true,
+      "@note": "全员生存刚需，价格最敏感" },
+    { "id": "good.mat",    "title": "料", "unit": "捆", "basePrice": 3.00,
+      "stockCapPerPop": 1.50, "spoilage": 0.01, "essential": false,
+      "@note": "木/石/矿/陶合并；M3 接入" },
+    { "id": "good.goods",  "title": "器", "unit": "件", "basePrice": 8.00,
+      "stockCapPerPop": 1.00, "spoilage": 0.00, "essential": false,
+      "@note": "工具/布/建材/兵器/书籍合并；M3 接入" },
+    { "id": "good.lux",    "title": "奢", "unit": "份", "basePrice": 20.00,
+      "stockCapPerPop": 0.50, "spoilage": 0.00, "essential": false,
+      "@note": "奢侈品，满意度与文化燃料；M3 接入" },
+    { "id": "good.silver", "title": "银", "unit": "两", "basePrice": 1.00,
+      "spoilage": 0.00, "essential": false,
+      "@note": "货币 = 计价单位，不设仓容上限；国际结算的唯一手段" }
+  ]
+}

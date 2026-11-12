@@ -102,8 +102,15 @@ public interface IPluginApi
     PluginManifest Manifest { get; }
     DataRegistry Data { get; }
 
-    /// <summary>注册 hook 处理器。priority 0–1000，小的先跑；同 priority 按插件 id 定序。</summary>
+    /// <summary>注册 hook 处理器（全局级：一个 hook 点跑一次）。priority 0–1000，小的先跑；同 priority 按插件 id 定序。</summary>
     void Require(HookPoint point, int priority, HookHandler handler);
+
+    /// <summary>
+    /// 注册主题级处理器（§10.4 的 <c>OnProduction(town, ctx)</c>）：Core 按 id 升序，
+    /// 对该 kind 的每个实体各跑一次。「哪些实体是主题」由调用 <see cref="IStepContext.DispatchSubjects"/>
+    /// 的扇出点决定，所以 Core 仍然不认识城镇。
+    /// </summary>
+    void RequireFor(HookPoint point, string entityKind, int priority, SubjectHandler handler);
 
     /// <summary>注册命令执行器（<c>town.found</c> 之类）。同类型重复注册 = 报错。</summary>
     void RegisterCommand(string type, CommandExecutor executor, string argDocs = "");

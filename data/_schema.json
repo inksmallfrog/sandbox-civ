@@ -1,0 +1,72 @@
+{
+  "@comment": [
+    "全仓库唯一的类型 schema（GDD §11.1 的 DATA_SCHEMA.md 的代码化身，规则见 DATA_SCHEMA.md）。",
+    "数据包自己不再声明 schema，避免同一类型被重复定义；加新类型 = 在这里加一段 + 在数据包里加条目。",
+    "路径一律点分；类型只有 fix / int / str / bool（fix = ×100 定点，GDD §10.7）。",
+    "required 写点分路径；refs 的值必须写成 \"def:<id>\"，加载时校验目标存在且类型正确。",
+    "output / consumes / price 的键用商品短名（food / mat / goods / lux / silver），运行时解析为 good.<短名>。"
+  ],
+  "types": {
+    "landform": {
+      "idPrefix": "landform.",
+      "required": ["title", "potential.food", "moveCost", "defense", "buildable", "color"],
+      "scalars": {
+        "title": "str",
+        "potential.food": "fix",
+        "potential.mat": "fix",
+        "moveCost": "int",
+        "defense": "int",
+        "buildable": "bool",
+        "color": "str",
+        "note": "str"
+      }
+    },
+    "class": {
+      "idPrefix": "class.",
+      "required": ["title", "labor", "output.food", "consumes.food", "satisfaction.expects"],
+      "scalars": {
+        "title": "str",
+        "labor": "fix",
+        "unlockPop": "int",
+        "satisfaction.expects": "fix",
+        "satisfaction.baseline": "int",
+        "status": "int",
+        "taxWeight": "fix",
+        "note": "str"
+      }
+    },
+    "good": {
+      "idPrefix": "good.",
+      "required": ["title", "unit", "basePrice"],
+      "scalars": {
+        "title": "str",
+        "unit": "str",
+        "basePrice": "fix",
+        "stockCapPerPop": "fix",
+        "spoilage": "fix",
+        "essential": "bool",
+        "note": "str"
+      }
+    },
+    "building": {
+      "idPrefix": "building.",
+      "required": ["title", "slot", "cost.food", "maxLevel"],
+      "scalars": {
+        "title": "str",
+        "slot": "str",
+        "cost.food": "fix",
+        "cost.silver": "fix",
+        "upgradeCost.food": "fix",
+        "maxLevel": "int",
+        "facility": "fix",
+        "tech": "fix",
+        "stockCap": "fix",
+        "spoilageCut": "fix",
+        "maintenance.food": "fix",
+        "requiresPop": "int",
+        "note": "str"
+      },
+      "refs": { "requiresBuilding": "building" }
+    }
+  }
+}

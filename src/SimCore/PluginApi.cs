@@ -63,6 +63,13 @@ public sealed partial class Simulation : IPluginRegistrar
             _sim.StartupLogLines.Add($"  {PluginId} 挂 {point}（全局，priority {priority}）");
         }
 
+        public void RequireFor(HookPoint point, string entityKind, int priority, SubjectHandler handler)
+        {
+            if (string.IsNullOrEmpty(entityKind)) throw new SimPluginException(PluginId, $"{point} 的主题 kind 为空");
+            _sim.Hooks.RegisterSubject(point, entityKind, PluginId, priority, handler);
+            _sim.StartupLogLines.Add($"  {PluginId} 挂 {point} × {entityKind}（主题级，priority {priority}）");
+        }
+
         public void RegisterCommand(string type, CommandExecutor executor, string argDocs = "")
         {
             if (string.IsNullOrEmpty(type)) throw new SimPluginException(PluginId, "命令类型为空");

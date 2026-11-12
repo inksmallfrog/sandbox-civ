@@ -1,0 +1,23 @@
+{
+  "@comment": [
+    "GDD §4.3 八阶级数据表的第一行：农民。数值照抄该表，是标定起点不是真理（§4.3 脚注）。",
+    "M1 只解锁农民；其余七阶级按 §4.4 的解锁链在 eco.* / mil.* 包里补，代码共用这一套模板。",
+    "labor 是抽象劳动量（L = P × λ），主产出在 output.* 里按商品短名给每人每年的量。"
+  ],
+  "type": "class",
+  "entries": [
+    {
+      "id": "class.peasant",
+      "title": "农民",
+      "labor": 1.00,
+      "output.food": 2.40,
+      "consumes.food": 1.00,
+      "satisfaction.expects": 0.85,
+      "satisfaction.baseline": 50,
+      "status": 0,
+      "taxWeight": 1.00,
+      "unlockPop": 0,
+      "@note": "第一产业主力；天然矛盾：商人（粮价）、官僚（税役）——矛盾表在 M4 接入"
+    }
+  ]
+}

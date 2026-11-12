@@ -256,6 +256,10 @@ public sealed class DataRegistry
         _entries[id] = entry;
         if (!_byType.TryGetValue(type, out var list)) _byType[type] = list = new();
         list.Add(entry);
+        // §10.7 纪律 1：OfType 是插件遍历数据的主要入口（阶级表、建筑表都要循环），
+        // 它的顺序必须与「文件在磁盘上被枚举的顺序」无关，所以每次插入按 id 重排。
+        // 数据量是几十条量级，重排的代价可以忽略；换来的是跨机器、跨打包方式的确定性。
+        list.Sort(static (a, b) => string.CompareOrdinal(a.Id, b.Id));
     }
 
     private static void Flatten(JsonElement el, string prefix, SortedDictionary<string, SimValue> into)
