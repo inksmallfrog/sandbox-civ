@@ -234,6 +234,13 @@ public sealed class DataRegistry
         if (string.IsNullOrEmpty(type))
             type = id.Contains('.') ? id[..id.IndexOf('.')] : "misc";
 
+        // §10.5「加新类型 = 先在 _schema.json 加一段，再在数据包里加条目」。
+        // 没声明就进来的类型享受零校验：必填、类型、引用全不查，一个拼错的
+        // "type": "noo" 会安静地变成一条没人懂的数据。只有整份数据包压根没有
+        // schema（_schemas 为空）时才放过——那是「裸数据」的合法用法。
+        if (_schemas.Count > 0 && !_schemas.ContainsKey(type))
+            _warnings.Add($"{source} {id}：type='{type}' 未在 {SchemaFileName} 里声明，加一段再进来");
+
         if (_schemas.TryGetValue(type, out var sch) && !string.IsNullOrEmpty(sch.IdPrefix) && !id.StartsWith(sch.IdPrefix, StringComparison.Ordinal))
             _warnings.Add($"{source} {id}：type={type} 要求 id 前缀 '{sch.IdPrefix}'");
 

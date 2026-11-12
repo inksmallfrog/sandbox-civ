@@ -9,4 +9,13 @@
     <RootNamespace>SimCore</RootNamespace>
     <AssemblyName>SimCore</AssemblyName>
   </PropertyGroup>
+
+  <!--
+    对外仍然只有 internal 级的后门：测试要能把某个字段拧成非法值来验证不变量守卫
+    （§10.2 职责 6），但这条通道绝不能对插件或壳层开放——否则「只有 Core 与
+    StepContext 能改状态」（§10.4）这条纪律就形同虚设。
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SimCore.Tests" />
+  </ItemGroup>
 </Project>

@@ -127,15 +127,19 @@ public sealed class RandomStream
     }
 
     /// <summary>
-    /// 近似正态：12 个均匀数之和减 6（Irwin–Hall），均值 0、方差 1，再乘标准差。
-    /// 全程加减与一次乘，不调 Math.Sqrt/Log，因此跨平台位级一致。
-    /// 用途：§4.2 的 ξ ~ N(0,2)、§5.3 的 shock ~ N(0,0.04)。
+    /// 近似正态：12 个 <c>[0,1)</c> 均匀定点数之和减其期望 5.94（Irwin–Hall），
+    /// 均值 0、方差 ≈1，再乘标准差。全程加减与一次乘，不调 Math.Sqrt/Log，
+    /// 因此跨平台位级一致。用途：§4.2 的 ξ ~ N(0,2)、§5.3 的 shock ~ N(0,0.04)。
     /// </summary>
     public Fix NextGaussian(Fix mean, Fix sd)
     {
         long sum = 0;
         for (int i = 0; i < 12; i++) sum += NextInt(0, (int)Fix.Scale);
-        Fix z = Fix.FromRaw(sum - 6 * Fix.Scale); // sd = 1.00（定点 100）
+        // 均匀支是 [0,100) 而不是 [0,100]，所以 12 个的期望是 12×49.5 = 594，不是 600。
+        // 减错这个常数会让 ξ 的均值停在 −0.06：乘上 sd=2 就是每年 −0.12 的满意度，
+        // 于是「没有任何灾年，民心也年年变差」——正是 §4.2 最不想要的系统性偏置。
+        // （单测里跑 20 万次取均值才抓到它：25σ 的偏差，逐回合看是看不出来的。）
+        Fix z = Fix.FromRaw(sum - 6 * (Fix.Scale - 1)); // sd = 1.00（定点 100）
         return mean + Fix.Mul(z, sd);
     }
 

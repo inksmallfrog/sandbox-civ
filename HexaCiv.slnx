@@ -4,4 +4,7 @@
     <Project Path="src/Plugins/core.basic/core.basic.csproj" />
     <Project Path="src/HexaCiv.Cli/HexaCiv.Cli.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SimCore.Tests/SimCore.Tests.csproj" />
+  </Folder>
 </Solution>

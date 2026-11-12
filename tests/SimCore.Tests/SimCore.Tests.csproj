@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    M0 验收要求「CI 绿」，而 CI 只有两条命令：dotnet build + dotnet test。
+    测试项目允许第三方包（xUnit），因为它不进游戏、不进 Godot 导出；
+    SimCore 与插件那条「只许 System.*」的纪律（ADR-002）对它不适用。
+    TargetFramework 跟着内核走 net8.0：测的运行时必须和玩家跑的运行时是同一个。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>HexaCiv.Tests</RootNamespace>
+    <!-- xUnit 的分析器爱建议 Assert.IsType 之类，测试里显式断言更有表达力 -->
+    <NoWarn>$(NoWarn);CA1707;xUnit2000;xUnit2013</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SimCore\SimCore.csproj" />
+    <ProjectReference Include="..\..\src\Plugins\core.basic\core.basic.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="SimCore" />
+    <Using Include="CoreBasic" />
+  </ItemGroup>
+
+</Project>
