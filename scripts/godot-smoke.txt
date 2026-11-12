@@ -1,0 +1,17 @@
+# 群邦纪元 HexaCiv · 跨宿主一致性脚本
+#
+# 这份脚本与 src/GodotShell/Main.cs 的 Smoke() 提交的命令<b>逐字相同</b>
+# （同一回合、同一顺序、同一参数、同一 reason），为的是一件事：
+#
+#   dotnet run --project src/HexaCiv.Cli -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
+#   godot --headless --path src/GodotShell -- --smoke
+#
+# 两边打印的逐回合哈希必须完全一致。CLI 宿主跑在 .NET SDK 的默认 AssemblyLoadContext 里，
+# Godot 宿主跑在它自己的脚本上下文里，插件还是从 build/plugins 的 dll 装载的——
+# 只有「同一个种子 + 同一条命令流 → 同一个哈希」在两个宿主都成立，
+# §10.7 的确定性和 §10.6 的回放才算真的立住，而不是「测试里自己跟自己一致」。
+#
+# 改 Smoke() 的参数时请同步改这里，否则上面那条对比立刻会红。
+
+1  nation.found  name=魏                              reason=冒烟
+1  town.found    hex=auto nation=auto                 reason=冒烟

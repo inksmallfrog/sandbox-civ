@@ -1,0 +1,24 @@
+<Project Sdk="Godot.NET.Sdk/4.6.1">
+
+  <!--
+    GodotShell —— 窗口壳层（GDD §10.1）。
+    纪律：这里只许出现「读状态 → 画出来」和「点按钮 → 提交命令」。
+    一旦出现「粮不够就减人口」这类判断，说明它属于 core.basic / eco.*，请搬回去。
+
+    TargetFramework 由仓库根的 Directory.Build.props 统一给（net8.0，对齐 GodotSharp）。
+  -->
+  <PropertyGroup>
+    <RootNamespace>HexaCiv.GodotShell</RootNamespace>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SimCore\SimCore.csproj" />
+    <!-- 引用 core.basic 不是为了「直接 new 出插件」——壳层不认识任何规则（§10.1）。
+         要它的是两件事：编辑器只编壳层时 dotnet 也会把插件产物落到 build/plugins；
+         以及插件 dll 就在本目录时 PluginHost 能按 manifest 解析到它（装载走 PluginLoadContext，
+         插件绑的是宿主这一份 SimCore，不是第二份）。 -->
+    <ProjectReference Include="..\Plugins\core.basic\core.basic.csproj" />
+  </ItemGroup>
+
+</Project>

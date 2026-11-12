@@ -1,0 +1,31 @@
+; 群邦纪元 HexaCiv · Godot 壳层工程（GDD ADR-001/002 · §10.1）
+;
+; 用 **带 .NET 的 Godot 4.6 编辑器**「导入并编辑」本目录（src/GodotShell）即可。
+; 打开前请先在仓库根跑一次 `dotnet build`：它会把 core.basic 落到 build/plugins/，
+; 壳层按目录加载插件（§10.2 职责 8），没有那个目录就只能跑「空世界」。
+;
+; 这里没有一条规则。规则在 src/SimCore 与 src/Plugins/core.basic 里（§10.1）。
+
+config_version=5
+
+[application]
+
+config/name="群邦纪元 HexaCiv（M1 窗口壳层）"
+config/description="六边形地图 + 建城 + 营造 + 回合结算。渲染与提交命令之外什么都不做。"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.6", "C#", "Forward Plus")
+
+[dotnet]
+
+project/assembly_name="HexaCiv.GodotShell"
+
+[display]
+
+window/size/viewport_width=1440
+window/size/viewport_height=880
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0.078, 0.086, 0.106, 1)
