@@ -1,4 +1,6 @@
+using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.Loader;
 
 namespace SimCore;
 
@@ -33,11 +35,16 @@ public sealed record DiscoveredPlugin(PluginManifest Manifest, string Directory)
 /// 文件存在 → 版本兼容 → 依赖齐全 → 无循环依赖 → 数据 id 无重复 → 系统注册成功。
 ///
 /// 发现方式：在插件根目录下每个子目录读一份 <c>manifest.json</c>；目录名必须等于 <c>id</c>。
-/// 程序集解析优先复用已加载的同名程序集（内置 <c>core.basic</c> 走这条路），
-/// 其次按 dll 路径 <c>Assembly.LoadFrom</c>（外部插件 / 创意工坊走这条路）。
+/// 程序集解析优先复用<b>宿主上下文</b>里已加载的同名程序集（内置 <c>core.basic</c> 走这条路），
+/// 其次把插件 dll 装进 <see cref="PluginLoadContext"/>（外部插件 / 创意工坊走这条路）——
+/// 两条路都必须让插件绑定宿主那一份 SimCore，否则 <see cref="IPlugin"/> 会变成两个不同的 Type。
 /// </summary>
 public sealed class PluginHost
 {
+    /// <summary>宿主（SimCore 自己）所在的加载上下文：CLI 下是默认上下文，Godot 4 下是脚本上下文。</summary>
+    internal static readonly AssemblyLoadContext HostContext =
+        AssemblyLoadContext.GetLoadContext(typeof(PluginHost).Assembly) ?? AssemblyLoadContext.Default;
+
     private readonly List<LoadedPlugin> _loaded = new();
     private readonly Dictionary<string, LoadedPlugin> _byId = new(StringComparer.Ordinal);
     private readonly List<string> _log = new();
@@ -168,13 +175,9 @@ public sealed class PluginHost
     {
         var asm = ResolveAssembly(manifest, knownAssemblies, dir);
 
-        Type? type = DiscoverTypes(asm).FirstOrDefault(t =>
-        {
-            try { return ((IPlugin)Activator.CreateInstance(t)!).Id == manifest.Id; }
-            catch { return false; }
-        });
+        Type? type = FindPluginType(asm, manifest.Id, out string why);
         if (type is null)
-            throw new SimPluginException(manifest.Id, $"程序集 {asm.GetName().Name} 里没有 Id={manifest.Id} 的 IPlugin 实现");
+            throw new SimPluginException(manifest.Id, why);
 
         IPlugin instance;
         try { instance = (IPlugin)Activator.CreateInstance(type)!; }
@@ -208,6 +211,67 @@ public sealed class PluginHost
             .OrderBy(t => t.FullName, StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// 在程序集里找 Id == <paramref name="pluginId"/> 的 <see cref="IPlugin"/> 实现；找不到时把「为什么」写进
+    /// <paramref name="why"/>。§10.5 要求拒载必须能解释，所以这里一行都不吞：
+    /// 类型装载失败、构造抛异常、实现了另一份同名 IPlugin、Id 不匹配——四种情况各说各话。
+    /// （原来这里是个 <c>catch { return false; }</c>，真凶「插件里的 IPlugin 不是宿主那一份」
+    /// 只会显示成「没有 IPlugin 实现」，害得调试从猜开始。）
+    /// </summary>
+    private static Type? FindPluginType(Assembly asm, string pluginId, out string why)
+    {
+        var notes = new List<string>();
+        why = "";
+        Type[] all;
+        try
+        {
+            all = asm.GetTypes();
+        }
+        catch (ReflectionTypeLoadException e)
+        {
+            all = e.Types.Where(t => t is not null).ToArray()!;
+            foreach (string m in e.LoaderExceptions
+                         .Where(x => x is not null).Select(x => x!.Message).Distinct(StringComparer.Ordinal))
+                notes.Add($"类型装载失败：{m}");
+        }
+
+        Type? expected = typeof(IPlugin);
+        foreach (var t in all)
+        {
+            if (!t.IsClass || t.IsAbstract) continue;
+            Type? iface;
+            try { iface = t.GetInterfaces().FirstOrDefault(i => i.FullName == expected.FullName); }
+            catch (Exception e) { notes.Add($"{t.FullName} 的接口读不出来：{e.GetType().Name} {e.Message}"); continue; }
+            if (iface is null) continue;
+
+            // 名字对得上但不是同一个 Type ⇒ 进程里有两份 SimCore，插件绑的是另一份。
+            if (iface != expected)
+            {
+                notes.Add($"{t.FullName} 实现的是另一份 IPlugin（{Where(iface.Assembly)}），宿主这一份是 {Where(expected.Assembly)}");
+                continue;
+            }
+
+            string id;
+            try { id = ((IPlugin)Activator.CreateInstance(t)!).Id; }
+            catch (Exception e) { notes.Add($"{t.FullName} 构造失败：{e.GetType().Name} {e.Message}"); continue; }
+            if (id == pluginId) return t;
+            notes.Add($"{t.FullName} 的 Id 是 {id}，不是 {pluginId}");
+        }
+
+        why = $"程序集 {asm.GetName().Name} 里没有 Id={pluginId} 的 IPlugin 实现"
+            + $"（{Where(asm)}，可见类型 {all.Length} 个）";
+        if (notes.Count > 0) why += "；原因：" + string.Join("；", notes);
+        return null;
+    }
+
+    /// <summary>程序集是谁、从哪来的——拒载信息里没有定位线索就等于没说。</summary>
+    private static string Where(Assembly a)
+    {
+        var n = a.GetName();
+        string src = string.IsNullOrEmpty(a.Location) ? "内存/单文件发布" : a.Location;
+        return $"{n.Name} v{n.Version} ← {src}";
+    }
+
     private static Assembly ResolveAssembly(PluginManifest manifest, IReadOnlyList<Assembly>? known, string dir)
     {
         // 1) 显式提供的程序集（内置插件 / 测试）
@@ -216,18 +280,72 @@ public sealed class PluginHost
             var hit = known.FirstOrDefault(a => string.Equals(a.GetName().Name, manifest.Id, StringComparison.Ordinal));
             if (hit is not null) return hit;
         }
-        // 2) 当前进程已加载的同名程序集：CLI 直接引用了 core.basic，走这条路
+        // 2) 当前进程已加载的同名程序集：CLI 直接引用了 core.basic，走这条路。
+        //    只要名字不要上下文会造成「同一份代码的两个拷贝」，所以优先宿主上下文里的那一个。
         var loaded = AppDomain.CurrentDomain.GetAssemblies()
-            .FirstOrDefault(a => string.Equals(a.GetName().Name, manifest.Id, StringComparison.Ordinal));
+            .Where(a => string.Equals(a.GetName().Name, manifest.Id, StringComparison.Ordinal))
+            .FirstOrDefault(a => (AssemblyLoadContext.GetLoadContext(a) ?? AssemblyLoadContext.Default) == HostContext)
+            ?? AppDomain.CurrentDomain.GetAssemblies()
+                .FirstOrDefault(a => string.Equals(a.GetName().Name, manifest.Id, StringComparison.Ordinal));
         if (loaded is not null) return loaded;
         // 3) 插件目录里的 dll
         string dllName = manifest.EffectiveDll;
-        string inDir = Path.Combine(dir, dllName);
-        if (File.Exists(inDir)) return Assembly.LoadFrom(inDir);
+        if (TryLoadPlugin(dir, dllName, out Assembly? fromDir)) return fromDir!;
         // 4) 应用基目录
-        string inBase = Path.Combine(AppContext.BaseDirectory, dllName);
-        if (File.Exists(inBase)) return Assembly.LoadFrom(inBase);
+        if (TryLoadPlugin(AppContext.BaseDirectory, dllName, out Assembly? fromBase)) return fromBase!;
         throw new SimPluginException(manifest.Id, $"找不到程序集 {dllName}（已加载 / 插件目录 {dir} / 基目录都没有）");
+    }
+
+    private static bool TryLoadPlugin(string dir, string dllName, out Assembly? asm)
+    {
+        string path = Path.GetFullPath(Path.Combine(dir, dllName));
+        if (!File.Exists(path)) { asm = null; return false; }
+        asm = PluginLoadContext.For(path).LoadFromAssemblyPath(path);
+        return asm is not null;
+    }
+
+    /// <summary>
+    /// 插件专用加载上下文（§10.3 外部插件 / 创意工坊的地基）。
+    ///
+    /// 为什么不用 <see cref="Assembly.LoadFrom(string)"/>：它把程序集塞进<b>默认</b>上下文，而宿主不一定在
+    /// 默认上下文里（Godot 4 的 C# 脚本跑在自己的 AssemblyLoadContext 中）。结果是插件实现的 IPlugin
+    /// 属于「第二份 SimCore」，宿主 cast 不过去。CLI 碰巧没事，因为它的宿主就在默认上下文——
+    /// 「这台机器能跑」从来不是加载策略的证明。
+    ///
+    /// 规则两条：依赖先在<b>宿主上下文</b>按简单名找（SimCore 等共享类型必须只有一份），
+    /// 找不到才按插件自己的 .deps.json 与同目录解析。所以插件目录里就算多塞一份 SimCore.dll 也不会被装载，
+    /// 这与 core.basic.csproj 里 <c>Private="false"</c> 的注释是同一件事的两半。
+    /// </summary>
+    internal sealed class PluginLoadContext : AssemblyLoadContext
+    {
+        private static readonly ConcurrentDictionary<string, PluginLoadContext> ByPath = new(StringComparer.OrdinalIgnoreCase);
+
+        private readonly AssemblyDependencyResolver _resolver;
+        private readonly string _directory;
+
+        private PluginLoadContext(string dllPath) : base(isCollectible: false)
+        {
+            _resolver = new AssemblyDependencyResolver(dllPath);
+            _directory = Path.GetDirectoryName(dllPath)!;
+        }
+
+        /// <summary>同一个 dll 复用同一个上下文，避免同名程序集在一个进程里被装载两遍。</summary>
+        public static PluginLoadContext For(string dllPath) =>
+            ByPath.GetOrAdd(dllPath, static p => new PluginLoadContext(p));
+
+        protected override Assembly? Load(AssemblyName name)
+        {
+            foreach (var a in HostContext.Assemblies)
+                if (string.Equals(a.GetName().Name, name.Name, StringComparison.OrdinalIgnoreCase)) return a;
+
+            string? path = _resolver.ResolveAssemblyToPath(name);
+            if (path is null)
+            {
+                string candidate = Path.Combine(_directory, (name.Name ?? "") + ".dll");
+                if (File.Exists(candidate)) path = candidate;
+            }
+            return path is null ? null : LoadFromAssemblyPath(path);
+        }
     }
 
     public IReadOnlyList<string> DescribeLoaded() =>
