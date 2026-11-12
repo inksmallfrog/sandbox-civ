@@ -46,10 +46,10 @@
 
 | 条目 | 状态 | 复现命令 |
 |---|---|---|
-| 空世界跑 1000 回合不崩 | ✅ | `dotnet run --project src/HexaCiv.Cli -- run --no-plugins --no-data --turns 1000 --quiet` → exit 0，3.7 s（含进程启动）。同一件事的常驻版本是测试 `空世界跑一千回合不崩` |
+| 空世界跑 1000 回合不崩 | ✅ | `dotnet run --project src/HexaCiv.Cli --no-build -- run --no-plugins --no-data --turns 1000 --quiet` → exit 0，**0.9 s**（含进程启动；带编译约 3.7 s）。同一件事的常驻版本是测试 `空世界跑一千回合不崩` |
 | 仓库结构 | ✅ | `docs/ARCH.md` §2 的目录树 = `ls` 结果 |
 | Godot + SimCore solution | ✅ | `HexaCiv.slnx`（SimCore / core.basic / CLI / tests）；GodotShell 刻意不入 solution，理由见 `ARCH.md` §5 |
-| 13 份文档 | ✅ | `docs/`：ARCH · CORE_API · PLUGIN_API · SIM_ORDER · DATA_SCHEMA · SAVE_FORMAT · NETWORKING · BALANCE · ROADMAP · TEST_PLAN · CHANGELOG-DESIGN · AI_HANDOFF · REQUIREMENTS（GDD 的第 13 份 README 挪到根目录） |
+| 文档 13 份（§11.1 要 12 份 + REQUIREMENTS） | ✅ | `docs/`：ARCH · CORE_API · PLUGIN_API · SIM_ORDER · DATA_SCHEMA · SAVE_FORMAT · NETWORKING · BALANCE · ROADMAP · TEST_PLAN · CHANGELOG-DESIGN · AI_HANDOFF = GDD 要求的另外 12 份，一份不缺；第 13 份是 `REQUIREMENTS.md`——§11.1 把 `GDD.md` 自己也算进 13 份里，而它是唯一不需要产出的那一份（且 AI 不得修改） |
 | **CI（单测 + headless）** | ⛪ **缺口** | 本仓库还没有 `.github/workflows`。M0 因此标 🟡 而不是 ✅。要补的 job 与命令清单在 `docs/TEST_PLAN.md` §6 |
 
 **这一条要在 M0 收尾时补上再打 `v0.0`**：§12 的推进规则是「验收不通过不许开下一个」，

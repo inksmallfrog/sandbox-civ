@@ -52,7 +52,7 @@ sandbox-civ/
   AGENTS.md              后续 AI 的最高优先级工作说明（§11.1）
   Directory.Build.props  net8.0 / LangVersion 12 / Nullable / TreatWarningsAsErrors / RepoRoot
   HexaCiv.slnx           SimCore + core.basic + sim + tests（Godot 壳层刻意不在里面，见 §6）
-  docs/                  GDD.md（唯一规则来源，AI 不得自行修改）+ 本套 13 份 + REQUIREMENTS.md + history/ + screenshots/
+  docs/                  GDD.md（唯一规则来源，AI 不得自行修改）+ §11.1 要求的另外 12 份 + REQUIREMENTS.md + history/ + screenshots/
   src/
     SimCore/             内核（20 个 .cs，见 §3）
     Plugins/core.basic/  参考规则包（BasicPlugin/F/MapGen/Nations/SeasonRules/Siting/TownOps + manifest.json）
@@ -61,7 +61,7 @@ sandbox-civ/
   data/
     _schema.json         每种数据包类型的字段与类型
     core.basic/          building.json / class.json / good.json / landform.json
-  tests/SimCore.Tests/   xUnit，58 条（单测 + §12 里程碑验收）
+  tests/SimCore.Tests/   xUnit，59 条（单测 + §12 里程碑验收）
   scripts/               demo.txt（命令脚本）、godot-smoke.txt（与窗口冒烟同流）
   analysis/out/          基线 CSV 报告（每个里程碑提交附一份）
   saves/                 回归样本档（.gitkeep，产物被 ignore）
