@@ -173,6 +173,101 @@
   **不影响存档、不影响哈希**（清单不进状态）。
 - 测试：`OrderAndDataTests.清单键名拼错就拒载而不是静默落回默认值` + `仓库里真的装着core_basic` 的三条新断言。
 
+### D-037 公式二（粮价求解器）+ 守恒等式不变量（M3 单镇经济）
+
+- 日期：2026-11-13 / 类型：**规则 + 结构** / 状态：已实现，已附 4 条回归测试
+- 改了什么：
+  1. 新增 `Pricing.cs`：第 6 步 Summer、OnPriceForm hook、market_local 层、每城跑一次。
+     `p_{t+1} = clamp( p_t × (1 + 0.30 × (D − S) / max(S, 0.5) + shock) , 0.2×p0, 5×p0 )`
+     只对粮（good.food）跑价格，其余商品暂保持 basePrice（M4 八阶级接入后循环扩展）。
+  2. F.cs 新增 6 组字段路径方法：`town.price/demand/supply/consumed/spoiled/spilled.*`。
+  3. `SeasonRules.Consume` 补写 `consumed/spoiled/spilled` 三个字段（守恒校验的数据源）。
+  4. `TownOps.Found` 建城时初始化粮价 = good.food.basePrice = 4.00。
+  5. 新增两个不变量：`basic.price_bounds`（第 6 步末，价格区间兜底）+ `basic.conservation`
+     （第 10 步末，`supply = stockAfter + consumed + spoiled + spilled`，允许误差 0.02）。
+- 为什么：GDD §5.3 / §5.9。M1 只实现了公式一（生产）、公式三（满意度），价格公式二、
+  物资守恒四条等式全是缺口。M3 要求"守恒通过 + 灾年价格轨迹符合预期"才能验收。
+- 定点纪律：gap = (D−S)/max(S, 0.5) 可能在 S 很小（0.5 档）时产生大绝对值，
+  但我们先算完整括号里的 change = 1 + 0.30×gap + shock，再乘 p_prev，最后 clamp——
+  中间量不会被 ×100 定点截断两次。shock = N(0, 0.04) 用 `Fix.FromPercent(4)`，
+  乘 p_prev 时大数字在前。
+- 时序：D（需求）在第 6 步是预计值 `need × pop`，不是第 10 步的实际消费。
+  这符合 GDD §5.4 的「市场先出清、后消费」语义。价格求解器**不修改库存**，
+  只改价格字段和 demand/supply 快照——实际库存变动全在第 10 步 Consume。
+- 模拟差异（同种子 seed 42 / 200 年，2026-11-13 实跑）：
+
+  | 指标 | M1 末态 | M3 末态 | 差异 |
+  |---|---|---|---|
+  | 城数 | 2 | 2 | — |
+  | 人口 | 163 | 163 | — |
+  | 粮产出 | 82.75 | 82.75 | — |
+  | 最低满意 | 26.58 | 26.58 | — |
+  | 不安城数 | 2 | 2 | — |
+  | **200 年哈希** | `820efa76ba0f98b6` | `e7e69b15db632966` | 🔄 变了 |
+  | **6 回合跨宿主哈希** | `5e8fb72f798550d4` | `9fe62d078937e3ef` | 🔄 变了 |
+
+  **末态数值完全一致，但哈希变了**——因为世界状态里多了 price/demand/supply/consumed/spoiled/spilled 等字段。
+  价格是"随供需变化的数字"，还没接入消费分配逻辑（那是 M5 多镇贸易的事），
+  所以人口、产出、满意度、不安的轨迹和 M1 相同。
+
+- 影响：
+  - **确定性**：两遍逐回合哈希全同（`sim hash` 通过）。RNG 流命名 `price.good.food.T{turn}`，三要素齐全。
+  - **存档兼容**：新存档带 price 字段，旧存档读进来 price 为 Fix.Zero，
+    Pricing.Price 里 fallback 用 good.food.basePrice（4.00）兜底，不会崩。
+    这是新增字段不改旧档的安全模式，不需要迁移器。
+  - **SimCore 零改动**：hook 点和 RNG 已就位，不需要开新接口。
+  - **数据文件零改动**：good.json 的 basePrice 4.00 已是 GDD §5.1 的值，不需要调。
+- 回归测试（4 条新增，全部在 `CoreBasicTests`）：
+  - `粮价初始化且五回合内保持在区间内` —— 建城时 price = 4.00，5 回合后仍在 [0.80, 20.00]
+  - `多种子二十回合粮价始终在区间内` —— seed 201–210，全部 clamp 生效
+  - `三十回合守恒不变量不触发` —— 能跑完 = supply = stockAfter + consumed + spoiled + spilled
+  - `灾年粮价涨丰年粮价跌` —— 辖地潜力清零后，价格从正常年的 3.12 涨到 7.30+
+- 踩坑记录（写入本仓库 `docs/AI_HANDOFF.md` §5）：
+  - FanOut stepId 写成 `"local"` 会导致 hook 不触发，正确 stepId 是 `"market_local"`
+    （`Time.cs` 的 stepIds 表：layer 名 ≠ stepId 名）
+  - 产出已被 Produce 写进 stock（AddFix），Pricing 里再 `stock + output` 会翻倍 supply → 守恒恒等于 supply - 2×supply ≠ 0
+
+---
+
+### D-038 M4 切片一：八阶级循环 + 状态机五档 + 多商品价格
+
+- 日期：2026-11-13 / 类型：功能扩展 / 状态：已实现，切片一完成
+- **为什么改**：M1 只有农民、只有粮、只有三档状态（服从/抱怨/反抗）。GDD §4.3 八阶级是文明的骨架，三条公式要能循环多阶级 × 多商品才能支撑八阶级的行为差异。切片一先把循环跑起来、五档状态机兑现罚则、价格求解器扩展到 4 种商品，原料约束（outputCost）和解锁闸门（unlockPop > 0）推切片二。
+
+- **改了什么**：
+  - `data/core.basic/class.json`：从 1 条 `class.peasant` 扩到 8 条（peasant/worker/merchant/priest/bureaucrat/scholar/soldier/artist），数值照抄 GDD §4.3 表。全部先 unlocked（unlockPop=0），解锁闸门推切片二。祭司/学者/文艺家的非物质产出（信仰/知识/文化）切片一 stub（有消费无产出）。
+  - `src/Plugins/core.basic/F.cs`：新增 `TownStatusPrev(clsId)`（状态机上回合值，供 `basic.class_monotonic` 不变量读）和 `TownWealth(clsId)`（阶级持有银，GDD §4.1，切片一先写字段路径不接逻辑）。
+  - `SeasonRules.Produce`：从只处理 `peasant → food` 改成循环 `ctx.Data.OfType(F.TypeClass)` × 循环每个阶级的 `output.*` 前缀键。状态机 multiplier：怠工=50%、罢工/暴动=0%、服从/抱怨=100%。hard cap（Cap × Facility）目前只对农民产粮生效（GDD §5.2 第一产业受地约束），非第一产业阶级先只用 soft cap。多阶级产同一商品时用 AddFix 累加到 output 字段（先清零再循环）。
+  - `SeasonRules.Consume`：从只处理 `peasant → food` 改成循环所有阶级 × 所有 `consumes.*` 前缀键。ration（s_c）简化决策：优先取 food 的 got/want，没有 food 需求的阶级取第一个消耗商品。仓满抛洒 + 年损耗循环所有商品（原来只循环 food）。
+  - `Pricing.Price`：从只跑 `good.food` 改成循环除 silver 外所有 4 种商品（food/mat/goods/lux）。D（本期需求）从只算 peasant 的 food 需求改成循环所有阶级的 `consumes.{goodShort}` × pop 汇总。公式参数不变：α=0.30、shock N(0,0.04)、clamp [0.2×p0, 5×p0]。
+  - `SeasonRules.Satisfaction`：状态机从三档（服从 S>55 / 抱怨 30<S≤55 / 反抗 S≤30）改成五档（服从 / 抱怨 / 怠工 riot≥2 / 罢工 riot≥3 / 暴动 riot≥4）。先存 prevStatus 到 `TownStatusPrev` 再算 next，为 `class_monotonic` 不变量提供输入。riot 还是全局计数（简化决策，per-class riot 推切片二）。
+  - `BasicPlugin`：新增 `basic.class_monotonic` 不变量（第 12 步末，检查状态只能逐步恶化或返回）；`basic.conservation` 从只循环 food 改成循环除 silver 外所有商品；原有 `basic.ranges` 和 `basic.price_bounds` 不变量保持不变。
+  - 测试：原有 69 条全绿（其中 1 条灾年测试硬编码 "反抗" 改成 "暴动"，因为 20 年断粮 riot≥4），新增 5 条：`八阶级循环五回合不崩` / `满意度满四年跌破三十到暴动档` / `怠工状态下产出折半` / `罢工状态下产出归零` / `四种商品价格都在区间内`。class_monotonic 集成测试跳过（正常游戏流里 Satisfaction 会自己维护 StatusPrev，跳级在运行时不可能发生）。
+
+- **没改什么（切片二债）**：
+  - 原料约束（`outputCost.*`）暂时忽略。工人产器耗料 1.2/人/年 的约束逻辑推切片二。
+  - 解锁闸门（`unlockPop > 0`）暂时全部阶级 unlocked。阶级切换/解锁逻辑推切片二。
+  - 非第一产业 hard cap（Cap × Facility 对工人/商人等阶级不生效）。
+  - `TownWealth` 字段路径已写但不接逻辑（M5 税制时接入）。
+  - per-class riot 计数（当前全局一个 riot 覆盖所有阶级的 S<30 连续年数）。
+  - Demography 人口增长/阶级转化：当前只对 peasant 有增长，其他阶级 M4 切片一不接增长逻辑。
+
+- **模拟差异（M3 → M4）**：
+  - **确定性**：seed=7 两遍 6 回合同 hash（`9c29b42e2868ef10`，M3 是 `9fe62d078937e3ef`）；seed=42 两遍 200 回合同 hash（`e824c66acc43569b`，M3 是 `e7e69b15db632966`）。值变了是预期内——状态机从 3 档改 5 档、多商品都跑价格/消耗、Conservation 循环扩展。
+  - **行为差异**：M4 切片一建城时**只初始化 peasant 的 pop/sat/growth**（其他 7 阶级 pop=0 自动跳过 Produce/Consume/Satisfaction），所以**单镇、单阶级、只有农民**的模拟轨迹和 M3 基本一致。差异来源：（1）状态机字符串从 "反抗" 变成 "怠工/罢工/暴动" 多档，虽然数值计算逻辑一样；（2）Pricing 对 mat/goods/lux 也跑价格公式，虽然这些商品目前库存=0、D=0，p_t+1 ≈ p_t（基本不涨不跌）；（3）Conservation 循环所有商品（silver 跳过），新增 3 个守恒检查点。
+  - **存档兼容**：旧存档没有 `TownStatusPrev.*` 字段，class_monotonic 不变量会因为 Rank=-1 跳过（`rp < 0 || rn < 0`），不触发错误。新字段全部有 fallback，不需要迁移器。
+  - **SimCore 零改动**：所有改动在插件层。
+  - **hook 落点 15 步 21 不变**：`sim check` 显示 hook 落点和 M3 完全一样，三个新增不变量挂在第 12 步末（class_monotonic）和第 10 步末（conservation 扩展后还是同一个不变量，只是循环范围变了）。
+  - **dataHash 变了**：M3 `eebed2c6f0ba30d1` → M4 `8a19d5bcee5da2fa`（class.json 从 1 条扩到 8 条）。
+
+- **回归结果**：
+  - `dotnet build` — 0 error / 0 warning
+  - `dotnet test` — 74/74 全绿（69 原有 + 5 M4 新增）
+  - `sim check` — 15 步 / 21 落点（7 不落在任何步骤），dataHash=8a19d5bcee5da2fa
+  - `sim hash --seed 7 --turns 6` — 两遍同 9c29b42e2868ef10
+  - `sim run --seed 42 --turns 200` — 两遍同 e824c66acc43569b
+  - `sim run --no-plugins --no-data --turns 1000` — 无崩溃
+
 ---
 
 ## 4. 引用修正（不改行为，但指错章节会让下一个人按错的规则改代码）
@@ -385,6 +480,25 @@
   `AI_HANDOFF.md` / `AGENTS.md` / `DEV_ENVIRONMENTS.md` 的实况段同步更新。
   20 张图的形胜清单在 `analysis/out/m2-shapes.txt`（gitignore 产物），人工目检判据仍是 §12 的那一条。
 
+### D-039 合并 M2 切片三/四 与 M3/M4 两条开发线（编号顺延 + 基线重定）
+
+- 日期：2026-11-13 / 类型：结构 / 状态：**已实现**
+- 改了什么：
+  - `master` 合并 `origin/master` 的四个提交（M3 公式二、M4 切片一及其两份文档同步）。代码自动合并，
+    只有 `AGENTS.md` / `docs/AI_HANDOFF.md` / `docs/ROADMAP.md` 三份文档需要人工合。
+  - **编号撞车**：两条线各自把新条目编成 D-035/D-036。按「编号只增不复用」，M2 切片三/四保留
+    D-035/D-036（代码注释已引用），M3/M4 两条顺延为 **D-037**（公式二 + 守恒）/ **D-038**（M4 切片一）。
+  - 合并后的新基线：`dataHash 1c451f9a3d142d7e`；seed 7 / 6 回合 `2e9b047076e49543`（CLI 与 Godot 同值）；
+    seed 99 / 50 回合 `aad33ef54aca84a7`；快照往返 `e9962eacb7b9402b` / 续跑 `1bf10ff00577dfca`；
+    seed 42 / 200 回合 `880d3f17bc5c47aa`；`dotnet test` = 95 绿；建图 74.3 ms。
+- 为什么：两条开发线并行时，各自的基线都是在对方的改动之外测的，合并后**任何一方的旧哈希都不再成立**
+  （地图字段 × 阶级/价格循环共同进世界哈希）。不重测就沿用旧值，等于把「确定」写成文档里的假证据。
+- 影响：`AGENTS.md` / `AI_HANDOFF.md` / `ROADMAP.md` / `BALANCE.md` / `TEST_PLAN.md` / `SAVE_FORMAT.md` /
+  `DATA_SCHEMA.md` / `DEV_ENVIRONMENTS.md` 的实况数字全部换成合并后的实测值；
+  D-037/D-038 条目里的"当时"基线表保留为历史记录，不再作为当前对账锚点。
+  **已知回归**：200 年基线在 M4 状态机下进入死亡螺旋（`pop` 150+ → 6），两条分支各自都如此，
+  不是合并引入的；处置记在 `AI_HANDOFF.md` §5 坑 22 与 `ROADMAP.md` §4，归 M4 切片二标定。
+
 ---
 
 ## 5. 逻辑量盘点（§12 推进规则第 2 条：只增不减视为失控信号）
@@ -397,23 +511,22 @@ find src/SimCore src/Plugins/core.basic src/HexaCiv.Cli src/GodotShell tests \
 dotnet run --project src/HexaCiv.Cli -- check | head -3
 ```
 
-| 量 | M2 结束（2026-11-13） | 怎么数出来的 |
+| 量 | M2+M3+M4 切片一合并后（2026-11-13） | 怎么数出来的 |
 |---|---:|---|
 | SimCore 文件 / 行 | 20 / 3404 | `find src/SimCore -name '*.cs'`（不含 `obj/` 生成物） |
-| `core.basic` 文件 / 行 | 9 / 2020 | 同上 |
-| CLI 壳层 / Godot 壳层 行 | 751 / 801 | 壳层合计 1552 行，**里面一条规则都没有**（§10.2） |
-| 测试行 / 条数 | 1687 / 86 | `dotnet test --list-tests` |
-| 数据文件 / 记录 | 8 / 37 | `data/_schema.json` + `data/core.basic/*.json`（地表 9、水体 2、形胜 12、资源 5、物资 5、建筑 3、阶级 1） |
+| `core.basic` 文件 / 行 | 10 / 2357 | 同上（+`Pricing.cs` / `Features.cs` / `Sculpt.cs`） |
+| CLI 壳层 / Godot 壳层 行 | 1562（合计） | 壳层合计 1562 行，**里面一条规则都没有**（§10.2） |
+| 测试行 / 条数 | 1827 / 95 | `dotnet test --list-tests` |
+| 数据文件 / 记录 | `_schema.json` + 7 个 json / 44 条 | 地表 9、水体 2、形胜 12、资源 5、物资 5、建筑 3、阶级 8 |
 | 结算步 | 15 | §2.3 写死，`sim check` 打印的表 |
 | hook 落点 | 21（其中 7 个不落在任何步骤） | `SimOrder.DescribeHookMap()` |
-| 已实装的规则处理器 | 11 处注册（4 个主题级 + 7 个全局/扇出） | `BasicPlugin.Register` |
-| 已实装的公式 | 2 / 3 | 公式一 ✅ 公式三 ✅ 人口 ✅；**公式二 ⛪** |
+| 已实装的规则处理器 | 12 处注册 | `BasicPlugin.Register` |
+| 已实装的公式 | 3 / 3 | 公式一 ✅ 公式二 ✅ 公式三 ✅ |
 | 命令 | 3 | `nation.found` / `town.found` / `building.build` |
-| 不变量 | 1（`basic.ranges`）+ Core 侧的 reason/顺序自检 | `BasicPlugin.cs:83` |
+| 不变量 | 4 组 | `basic.ranges` / `basic.price_bounds` / `basic.conservation` / `basic.class_monotonic` |
 | 图层声明 | 5 / 9 | `terrain` `owner` `agriculture` `resource` `population`；§3.9 的阶级/贸易/军事/信仰/文化随 M4/M5/M7/M8 进 |
 
-**判读**：M2 结束时 SimCore 仍是 20 文件 / 3404 行，**一行没涨**——形胜、资源、骨架雕刻全在
-`core.basic`（9 文件 / 2020 行），符合「Core 稳定、插件扩展」。单文件最长的仍是 `MapGen.cs`
-（约 500 行，未触发 ~1200 行的拆文件阈值）；新增的 `Features.cs` / `Sculpt.cs` 是把识别规则与
-生成骨架从 MapGen 里分出来的，因为两者职责不同：一个读拓扑出标签，一个改高度保证骨架。
-下一次盘点在 M3 结束时做，重点看 SimCore 行数与公式二落点。
+**判读**：合并后 SimCore 仍是 20 文件 / 3404 行，**一行没涨**——M3/M4 的规则、价格与状态机全在
+`core.basic`（10 文件 / 2357 行），符合「Core 稳定、插件扩展」。单文件最长的仍是 `MapGen.cs`
+（约 500 行，未触发 ~1200 行的拆文件阈值）。
+下一次盘点在 M4 切片二结束时做，重点看状态机罚则的标定（200 年死亡螺旋）与原料约束的落点。

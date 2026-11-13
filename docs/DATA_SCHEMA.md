@@ -101,7 +101,7 @@ data/
 ```
 数据包 E:\project\sandbox-civ\data
   ✓ 37 条记录 / 1 个包（core.basic）
-  dataHash = 78bad421c6439b0d
+  dataHash = 1c451f9a3d142d7e
     building   3 条：building.farm, building.granary, building.workshop
     class      1 条：class.peasant
     good       5 条：good.food, good.goods, good.lux, good.mat, good.silver

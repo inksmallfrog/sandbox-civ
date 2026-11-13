@@ -21,105 +21,240 @@ public static class SeasonRules
     // ================= 第 3 步 agriculture：公式一（§4.2 / §5.2）=================
 
     /// <summary>
-    /// <c>Out = min( P × λ × Tech × η(S) , Cap × Facility )</c>，其中 <c>η(S) = 0.6 + 0.4 × S/100</c>。
-    /// 人是软上限、地是硬上限——§5.2 特别点名这一条挡住了「没有人口也自动产出」的经典 bug。
-    /// M1 只有农民与粮：<c>Tech = 1.00</c>（科技卡 M6），缺料折扣不触发（还没有工/奢）。
+    /// <c>Out_c = min( P_c × λ_c × Tech × η(S_c) × statusMult , Cap_c × Facility_c )</c>，
+    /// 其中 <c>η(S) = 0.6 + 0.4 × S/100</c>。状态机 multiplier：服从/抱怨=100%、怠工=50%、罢工/暴动=0%。
+    ///
+    /// M4 循环全部阶级 × 全部 output.* 商品（原来只处理 peasant → food）。
+    /// hard cap（Cap × Facility）目前只对农民产粮生效——其他非第一产业阶级先只用 soft cap。
+    /// Tech = 1.00 恒（科技卡 M6）；原料约束 outputCost.* 推切片二。
     /// </summary>
     public static void Produce(EntityId town, HookArgs args, IStepContext ctx)
     {
-        var peasant = ctx.Data.Get("class.peasant");
-        Fix lambda = peasant.GetFix("output.food");      // §4.3：农民 2.40 粮/人/年
         Fix tech = Fix.One;                               // M6 换成科技卡倍率（1.0–2.5）
 
-        long pop = ctx.GetInt(town, F.TownPop("class.peasant"));
-        if (pop <= 0)
-        {
-            ctx.Mutate(town, F.TownOutput("good.food"), Fix.Zero, "P = 0 ⇒ 产出 0（§4.2：没有人不打粮）");
-            return;
-        }
+        // ---- 先清零本期所有商品的 output 字段（Produce 每回合重算）----
+        foreach (var good in ctx.Data.OfType(F.TypeGood))
+            ctx.Mutate(town, F.TownOutput(good.Id), Fix.Zero,
+                $"第 3 步清 {good.GetStr("title")} 本期产出（上回合已 AddFix 进 stock）");
 
-        Fix sat = ctx.GetFix(town, F.TownSat("class.peasant"), Fix.FromInt(50));
-        // η(S) = 0.6 + 0.4 × S/100：写成两个定点百分数的乘积，全程不出现浮点（§10.7 纪律 3）
-        Fix eta = Fix.FromPercent(60) + Fix.Mul(Fix.FromPercent(40), Fix.Div(sat, Hundred));
-
+        // ---- 循环全部阶级 × 全部 output.* 键 ----
         var tiles = TownOps.TilesOf(ctx, town);
-        Fix cap = Fix.Zero;
-        foreach (var t in tiles) cap += ctx.GetFix(t, F.HexYieldFood, Fix.Zero);
+        Fix capGrain = Fix.Zero;
+        foreach (var t in tiles) capGrain += ctx.GetFix(t, F.HexYieldFood, Fix.Zero);
         Fix facility = ctx.GetFix(town, F.TownFacility, Fix.One);
 
-        Fix soft = Fix.Mul(Fix.Mul(Fix.FromInt(pop), lambda), Fix.Mul(tech, eta));
-        Fix hard = Fix.Mul(cap, facility);
-        Fix gross = Fix.Min(soft, hard);
-        Fix store = ctx.GetFix(town, F.TownStock("good.food"), Fix.Zero);
+        foreach (var cls in ctx.Data.OfType(F.TypeClass))
+        {
+            string cid = cls.Id;
+            long pop = ctx.GetInt(town, F.TownPop(cid));
+            if (pop <= 0) continue;
 
-        ctx.Mutate(town, F.TownOutput("good.food"), gross, "本年净产出，年报与价格求解都读它（§4.1 的 output）");
-        ctx.AddFix(town, F.TownStock("good.food"), gross, $"第 3 步农业产出 +{gross.Text} 石");
+            Fix sat = ctx.GetFix(town, F.TownSat(cid), Fix.FromInt(50));
+            Fix eta = Fix.FromPercent(60) + Fix.Mul(Fix.FromPercent(40), Fix.Div(sat, Hundred));
 
-        ctx.Explain(town, "粮食产出（§5.2 公式一）",
-            "Out = min( P × λ × Tech × η(S) , Cap × Facility )",
-            [$"P（农民人口）= {pop} 个百人单位 = {pop * 100} 人",
-             $"λ = {lambda.Text} 粮/人/年（data/core.basic/class.json）",
-             $"Tech = {tech.Text}（科技卡 M6 接入，现在恒 1.00）",
-             $"η(S) = 0.6 + 0.4 × {sat.Text}/100 = {eta.Text}（满意的人干活多）",
-             $"⇒ 人的上限 soft = {soft.Text} 石",
-             $"Cap（辖地 ΣY）= {cap.Text} 石，共 {tiles.Count} 格",
-             $"Facility = {facility.Text}（第 2 步折算，§4.2 封顶 1.45）",
-             $"⇒ 地的上限 hard = {hard.Text} 石"],
-            $"Out = {(soft <= hard ? "人" : "地")}为紧约束 → {gross.Text} 石；仓底 {store.Text} → {(store + gross).Text} 石");
+            // 状态机罚则（GDD §4.2 状态）：服从/抱怨 100%、怠工 50%、罢工/暴动 0%
+            string status = ctx.GetStr(town, F.TownStatus(cid));
+            Fix statusMult = status switch
+            {
+                "怠工" => Fix.FromPercent(50),
+                "罢工" or "暴动" => Fix.Zero,
+                _ => Fix.One
+            };
+
+            // 循环 output.* 所有键，按商品短名分组累加
+            var outputKeys = cls.Scalars
+                .Where(kv => kv.Key.StartsWith("output.", StringComparison.Ordinal) && !kv.Key.StartsWith("outputCost.", StringComparison.Ordinal))
+                .OrderBy(kv => kv.Key, StringComparer.Ordinal);
+
+            foreach (var kv in outputKeys)
+            {
+                Fix lambda = kv.Value.AsFix();
+                if (lambda.IsZero) continue;
+
+                string goodShort = kv.Key["output.".Length..];
+                string goodId = "good." + goodShort;
+                if (!ctx.Data.TryGet(goodId, out _)) continue;
+
+                // soft cap：P × λ × Tech × η(S) × statusMult
+                Fix soft = Fix.Mul(
+                    Fix.Mul(Fix.FromInt(pop), lambda),
+                    Fix.Mul(tech, Fix.Mul(eta, statusMult)));
+
+                // hard cap 只对农民产粮生效（§5.2：第一产业受地约束）
+                Fix gross;
+                if (cid == "class.peasant" && goodShort == "food")
+                {
+                    Fix hard = Fix.Mul(capGrain, facility);
+                    gross = Fix.Min(soft, hard);
+                }
+                else
+                {
+                    gross = soft;
+                }
+
+                // 累积 output 字段（多阶级产同一商品会 AddFix 累加）
+                ctx.AddFix(town, F.TownOutput(goodId), gross,
+                    $"{cls.GetStr("title")}×{goodShort}：{gross.Text}（§4.2 公式一，mult={statusMult.Text}）");
+
+                // 加进 stock（M3 坑 2 已修：Pricing 第 6 步读的 stock 已包含产出）
+                ctx.AddFix(town, F.TownStock(goodId), gross,
+                    $"第 3 步 {cls.GetStr("title")} 产 {goodShort} +{gross.Text}");
+            }
+        }
+
+        // ---- 聚合解释：公式一正文（§8.4 要求公式原样出现在解释里）----
+        Fix totalFoodOut = ctx.GetFix(town, F.TownOutput("good.food"), Fix.Zero);
+        if (!totalFoodOut.IsZero)
+        {
+            var peasant = ctx.Data.Get("class.peasant");
+            long pPeasant = ctx.GetInt(town, F.TownPop("class.peasant"));
+            Fix lambda = peasant.GetFix("output.food");
+            Fix sat = ctx.GetFix(town, F.TownSat("class.peasant"), Fix.FromInt(50));
+            Fix eta = Fix.FromPercent(60) + Fix.Mul(Fix.FromPercent(40), Fix.Div(sat, Hundred));
+            Fix soft = Fix.Mul(Fix.Mul(Fix.FromInt(pPeasant), lambda), Fix.Mul(tech, eta));
+            Fix hard = Fix.Mul(capGrain, facility);
+            string status = ctx.GetStr(town, F.TownStatus("class.peasant"));
+
+            ctx.Explain(town, "粮食产出（§5.2 公式一）",
+                "Out = min( P × λ × Tech × η(S) , Cap × Facility )",
+                [$"P（农民人口）= {pPeasant} 个百人单位 = {pPeasant * 100} 人",
+                 $"λ = {lambda.Text} 粮/人/年（data/core.basic/class.json）",
+                 $"Tech = {tech.Text}（科技卡 M6 接入，现在恒 1.00）",
+                 $"η(S) = 0.6 + 0.4 × {sat.Text}/100 = {eta.Text}（满意的人干活多）",
+                 $"状态「{status}」× statusMult = {(status switch { "怠工" => "50%", "罢工" or "暴动" => "0%", _ => "100%" })}",
+                 $"⇒ 人的上限 soft = {soft.Text} 石",
+                 $"Cap（辖地 ΣY）= {capGrain.Text} 石",
+                 $"Facility = {facility.Text}（第 2 步折算，§4.2 封顶 1.45）",
+                 $"⇒ 地的上限 hard = {hard.Text} 石"],
+                $"Out = {(soft <= hard ? "人" : "地")}为紧约束 → {totalFoodOut.Text} 石");
+        }
     }
 
     // ========== 第 10 步 consumption：口粮、满足率、仓满抛洒与损耗（§4.2 s_c、§5.4 步 6）==========
 
+    /// <summary>
+    /// M4：循环全部阶级 × 全部 consumes.* 商品（原来只处理 peasant → food）。
+    /// 简化决策：ration 取 food 的 got/want（§4.2 的 s_c），没有 food 需求的阶级取第一个消耗商品的 ration。
+    /// 仓满抛洒 + 损耗循环所有商品（不是只 food）。
+    /// </summary>
     public static void Consume(EntityId town, HookArgs args, IStepContext ctx)
     {
-        var peasant = ctx.Data.Get("class.peasant");
-        Fix need = peasant.GetFix("consumes.food");       // §4.3：1.00 粮/人/年
-
-        long pop = ctx.GetInt(town, F.TownPop("class.peasant"));
-        Fix want = Fix.Mul(need, pop);
-        Fix have = ctx.GetFix(town, F.TownStock("good.food"), Fix.Zero);
-
-        Fix got = Fix.Min(have, want);
-        Fix ration = want.IsZero ? Fix.One : Fix.Div(got, want);
-        ctx.AddFix(town, F.TownStock("good.food"), -got, $"第 10 步口粮 −{got.Text} 石（需求 {want.Text}）");
-        ctx.Mutate(town, F.TownRation("class.peasant"), ration, "s_c = min(1, 实得/需求)（§4.2），公式三的输入");
-
-        // 仓满抛洒：先按仓容截断，剩下的才对年损耗计息
-        Fix left = have - got;
-        Fix stockCap = ctx.GetFix(town, F.TownStockCap("good.food"), Fix.MaxValue);
-        if (left > stockCap)
+        // ---- 先清零本期所有商品的 consumed/spoiled/spilled ----
+        foreach (var good in ctx.Data.OfType(F.TypeGood))
         {
-            Fix spilled = left - stockCap;
-            ctx.Mutate(town, F.TownStock("good.food"), stockCap,
-                $"仓容 {stockCap.Text} 已满，抛洒 {spilled.Text} 石（§5.4 步 6：剩余物资留仓，仓满即抛）");
-            left = stockCap;
+            ctx.Mutate(town, F.TownConsumed(good.Id), Fix.Zero, "第 10 步清本期消耗");
+            ctx.Mutate(town, F.TownSpoiled(good.Id), Fix.Zero, "第 10 步清本期损耗");
+            ctx.Mutate(town, F.TownSpilled(good.Id), Fix.Zero, "第 10 步清本期抛洒");
         }
 
-        Fix rate = ctx.GetFix(town, F.TownSpoilage("good.food"), Fix.Zero);
-        Fix rotten = Fix.Mul(left, rate);
-        if (!rotten.IsZero)
+        // ---- 循环全部阶级 × 全部 consumes.* 键 ----
+        foreach (var cls in ctx.Data.OfType(F.TypeClass))
         {
-            ctx.AddFix(town, F.TownStock("good.food"), -rotten,
-                $"存粮损耗 {left.Text} × {rate.Text} = −{rotten.Text} 石（§5.7 的 5%/年，粮仓每级 −2%）");
-            // 全国合计走 report.*：第 15 步的年报直接读，不必再遍历一次仓库
-            ctx.AddFix(World.GlobalId, F.ReportFoodRot, rotten, "年报：本年损耗合计");
+            string cid = cls.Id;
+            long pop = ctx.GetInt(town, F.TownPop(cid));
+            if (pop <= 0)
+            {
+                ctx.Mutate(town, F.TownRation(cid), Fix.One, "P = 0 ⇒ 自动 1.00 满足率");
+                continue;
+            }
+
+            Fix? foodGot = null, foodWant = null;  // 用于计算该阶级的 ration（简化取 food）
+            Fix firstGot = Fix.Zero, firstWant = Fix.Zero;
+            string? firstGoodShort = null;
+            bool firstSeen = false;
+
+            var consumeKeys = cls.Scalars
+                .Where(kv => kv.Key.StartsWith("consumes.", StringComparison.Ordinal))
+                .OrderBy(kv => kv.Key, StringComparer.Ordinal);
+
+            foreach (var kv in consumeKeys)
+            {
+                Fix need = kv.Value.AsFix();
+                if (need.IsZero) continue;
+
+                string goodShort = kv.Key["consumes.".Length..];
+                string goodId = "good." + goodShort;
+                if (!ctx.Data.TryGet(goodId, out _)) continue;
+
+                Fix want = Fix.Mul(need, pop);
+                Fix have = ctx.GetFix(town, F.TownStock(goodId), Fix.Zero);
+                Fix got = Fix.Min(have, want);
+
+                // 扣库存
+                ctx.AddFix(town, F.TownStock(goodId), -got,
+                    $"第 10 步 {cls.GetStr("title")} 耗 {goodShort} −{got.Text}（需求 {want.Text}）");
+                // 累积 consumed（§5.9 守恒）
+                ctx.AddFix(town, F.TownConsumed(goodId), got,
+                    $"§5.9 守恒：{cls.GetStr("title")} 耗 {goodShort} {got.Text}");
+
+                // 记录第一个 seen 的商品（fallback ration）
+                if (!firstSeen) { firstSeen = true; firstGot = got; firstWant = want; firstGoodShort = goodShort; }
+
+                // 记录 food（优先用于 ration 计算）
+                if (goodShort == "food") { foodGot = got; foodWant = want; }
+            }
+
+            // ration：优先 food，否则第一个消耗商品（§4.2 的 s_c = min(1, 实得/需求)）
+            Fix chosenGot, chosenWant;
+            if (foodGot.HasValue) { chosenGot = foodGot.Value; chosenWant = foodWant!.Value; }
+            else if (firstSeen) { chosenGot = firstGot; chosenWant = firstWant; }
+            else { chosenGot = Fix.Zero; chosenWant = Fix.Zero; }
+
+            Fix ration = chosenWant.IsZero ? Fix.One : Fix.Div(chosenGot, chosenWant);
+            ctx.Mutate(town, F.TownRation(cid), ration,
+                $"s_c = min(1, 实得/需求)（§4.2），公式三的输入" +
+                (chosenWant.IsZero ? "" : $"（{firstGoodShort ?? "?"}：{chosenGot.Text}/{chosenWant.Text}）"));
+
+            if (ration < Fix.One)
+                ctx.Note($"{ctx.GetStr(town, F.TownName)}：{cls.GetStr("title")}的{firstGoodShort ?? "口粮"}只够 {Percent(chosenGot, chosenWant)}%");
         }
 
-        if (ration < Fix.One)
-            ctx.Note($"{ctx.GetStr(town, F.TownName)}：口粮只够 {Percent(got, want)}%（需求 {want.Text}，实得 {got.Text}，缺 {(want - got).Text} 石）");
+        // ---- 仓满抛洒 + 年损耗（循环所有商品）----
+        foreach (var good in ctx.Data.OfType(F.TypeGood))
+        {
+            Fix stock = ctx.GetFix(town, F.TownStock(good.Id), Fix.Zero);
+            if (stock.IsZero) continue;
+
+            // 仓满抛洒
+            Fix stockCap = ctx.GetFix(town, F.TownStockCap(good.Id), Fix.MaxValue);
+            Fix spilled = Fix.Zero;
+            if (stock > stockCap)
+            {
+                spilled = stock - stockCap;
+                ctx.Mutate(town, F.TownStock(good.Id), stockCap,
+                    $"{good.GetStr("title")}仓容 {stockCap.Text} 已满，抛洒 {spilled.Text}（§5.4 步 6）");
+            }
+            ctx.Mutate(town, F.TownSpilled(good.Id), spilled, "§5.9 守恒：仓满抛洒");
+
+            // 年损耗
+            Fix rate = ctx.GetFix(town, F.TownSpoilage(good.Id), Fix.Zero);
+            Fix rotten = Fix.Mul(stock - spilled, rate);
+            if (!rotten.IsZero)
+            {
+                ctx.AddFix(town, F.TownStock(good.Id), -rotten,
+                    $"{good.GetStr("title")}损耗 {(stock - spilled).Text} × {rate.Text} = −{rotten.Text}（§5.7）");
+                // 年报：只累粮的损耗（ReportFoodRot 语义是粮损耗，非粮损耗切片一不单独报）
+                if (good.Id == "good.food")
+                    ctx.AddFix(World.GlobalId, F.ReportFoodRot, rotten, "年报：本年粮损耗合计");
+            }
+            ctx.Mutate(town, F.TownSpoiled(good.Id), rotten, "§5.9 守恒：年损耗");
+        }
     }
 
     // ================= 第 12 步 satisfaction：公式三（§4.2 / 附录 A §3）=================
 
     /// <summary>
-    /// <c>S* = 50 + 60(s−e) − 20·税负 + 10·政策 + 10·信仰 − 15·矛盾 + 8·地位</c>，
+    /// <c>S* = 基线 + 60(s−e) − 20·税负 + 10·政策 + 10·信仰 − 15·矛盾 + 8·地位</c>，
     /// <c>S ← clamp(S + 0.35(S*−S) + ξ, 0, 100)</c>，<c>ξ ~ N(0, 2)</c>。
-    /// M1 只有基线与 s−e 项：税制在 M4、政策卡 M5、信仰 M7、阶级矛盾 M4、地位 M8。
-    /// 不参与的各项按 0 写进 Explain——让玩家看得见「这一项还没算」，比藏着不说好。
+    ///
+    /// M4 状态机 5 档（§4.2）：服从 / 抱怨 / 怠工（S<30 满 2 年产出折半）/
+    /// 罢工（满 3 年产出归零）/ 暴动（满 4 年城镇倒计时）。简化决策：先用全局 riot 计数，
+    /// 所有阶级共享；per-class riot 推切片二。
     /// </summary>
     public static void Satisfaction(EntityId town, HookArgs args, IStepContext ctx)
     {
         bool anyRebellious = false;
+        int riot = (int)ctx.GetInt(town, F.TownRiot);  // 先读当前 riot，后面会更新
 
         foreach (var cls in ctx.Data.OfType(F.TypeClass))
         {
@@ -130,7 +265,7 @@ public static class SeasonRules
             Fix s = ctx.GetFix(town, F.TownRation(cid), Fix.Zero);
             Fix e = cls.GetFix("satisfaction.expects");
             Fix baseline = Fix.FromInt((int)cls.GetInt("satisfaction.baseline", 50));
-            Fix premium = Fix.Mul(Fix.FromInt(60), s - e);       // 60(s−e)：其余四项 M1 为 0
+            Fix premium = Fix.Mul(Fix.FromInt(60), s - e);       // 60(s−e)
             Fix star = (baseline + premium).Clamp(Fix.Zero, Hundred);
 
             var stream = ctx.Rng.Stream(town, $"satisfaction.{F.Bare(cid)}.T{ctx.Time.Turn}");
@@ -141,9 +276,25 @@ public static class SeasonRules
             ctx.Mutate(town, F.TownSat(cid), next,
                 $"S ← S + 0.35(S*−S) + ξ（§4.2 公式三）：{sat.Text} → {next.Text}");
 
-            string status = next > Fix.FromInt(55) ? "服从" : next >= Fix.FromInt(30) ? "抱怨" : "反抗";
-            ctx.Mutate(town, F.TownStatus(cid), status, "§4.2 三档：>55 服从 / 30–55 抱怨 / <30 反抗");
-            if (next < Fix.FromInt(30)) anyRebellious = true;
+            // ---- 状态机 5 档（§4.2）----
+            string prevStatus = ctx.GetStr(town, F.TownStatus(cid));
+            ctx.Mutate(town, F.TownStatusPrev(cid), prevStatus,
+                "状态机：存上回合状态（§5.9 的 monotonic 不变量要读）");
+
+            string nextStatus;
+            if (next > Fix.FromInt(55))
+                nextStatus = "服从";
+            else if (next >= Fix.FromInt(30))
+                nextStatus = "抱怨";
+            else
+            {
+                anyRebellious = true;
+                nextStatus = riot >= 4 ? "暴动" : riot >= 3 ? "罢工" : riot >= 2 ? "怠工" : "抱怨";
+            }
+
+            ctx.Mutate(town, F.TownStatus(cid), nextStatus,
+                $"§4.2 五档：{prevStatus} → {nextStatus}" +
+                (next < Fix.FromInt(30) ? $"（连续 S<30 第 {riot + 1} 年）" : ""));
 
             ctx.Explain(town, $"{cls.GetStr("title")}满意度（§4.2 公式三）",
                 "S* = 基线 + 60(s−e) − 20·税负 + 10·政策 + 10·信仰 − 15·矛盾 + 8·地位",
@@ -152,15 +303,16 @@ public static class SeasonRules
                  "税负 / 政策 / 信仰 / 矛盾 / 地位 = 0（M4·M5·M7·M4·M8 接入）",
                  $"⇒ S* = {star.Text}，本年 S = {sat.Text}",
                  $"收敛 0.35(S*−S) = {pull.Text}，噪声 ξ ~ N(0,2) = {xi.Text}",
-                 $"状态「{status}」（>55 服从 / 30–55 抱怨 / <30 反抗）"],
+                 $"状态「{nextStatus}」（{prevStatus} → {nextStatus}）"],
                 $"S ← {next.Text}（clamp 0–100）");
         }
 
-        // §4.2 的升级闸门：S<30 要连续 2 年才升级到怠工/罢工/暴动，所以这里只记年数，罚则 M4 兑现
-        int prev = (int)ctx.GetInt(town, F.TownRiot);
-        int riot = anyRebellious ? prev + 1 : 0;
-        ctx.Mutate(town, F.TownRiot, riot,
-            riot == 0 ? "没有阶级在反抗线以下，倒计时清零" : $"连续 {riot} 年有阶级 S<30（§4.2 满 2 年才升级）");
+        // §4.2 的升级闸门：S<30 连续年数
+        int prevRiot = riot;
+        int newRiot = anyRebellious ? prevRiot + 1 : 0;
+        ctx.Mutate(town, F.TownRiot, newRiot,
+            newRiot == 0 ? "没有阶级在反抗线以下，倒计时清零"
+            : $"连续 {newRiot} 年有阶级 S<30（§4.2 满 2/3/4 年 → 怠工/罢工/暴动）");
     }
 
     // ================= 第 13 步 demography：人口增长（附录 A §8）=================

@@ -22,6 +22,7 @@ M1 Core 与 M2 地图已完成：无头模拟器和 Godot 窗口壳可运行，�
 
 - [开发与 AI 协作约定](AGENTS.md)
 - [开发宿主与快速启动](docs/DEV_ENVIRONMENTS.md)
+- [UI 设计方案](docs/UI_DESIGN.md)
 - [设计文档 GDD](docs/GDD.md)
 - [用户需求](docs/REQUIREMENTS.md)
 - [路线图](docs/ROADMAP.md)

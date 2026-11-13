@@ -2,7 +2,7 @@
 
 > 规范来源：GDD §10.8（七类测试与「每里程碑附一份基线报告」）、§12（里程碑验收）、
 > §5.9（不变量）、§10.7（确定性）、§14（风险表的触发阈值）。
-> 实现：`tests/SimCore.Tests/`（86 条，1687 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
+> 实现：`tests/SimCore.Tests/`（95 条，1827 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```bash
 dotnet build                # TreatWarningsAsErrors：警告就是错误
-dotnet test                 # 86 条
+dotnet test                 # 95 条
 dotnet run --project src/HexaCiv.Cli -- check                    # 数据包 + 插件清单
 dotnet run --project src/HexaCiv.Cli -- hash   --seed 99 --turns 50
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5  --turns 20 --at 12
@@ -29,8 +29,8 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 
 | §10.8 类型 | 要求 | 现在 | 落在哪 |
 |---|---|---|---|
-| 单测 | 三条公式各自可测，不启动渲染 | 🟡 公式一 ✅、公式三 ✅、人口 ✅；**公式二（价格）没有**，因为没实现 | `CoreBasicTests` |
-| 不变量 | 物资/人口/银守恒、价格区间、状态机不越级 | 🟡 范围与符号 ✅（`basic.ranges`）、变更必带 reason ✅；**三条守恒等式与价格区间没有** | `BasicPlugin.Sanity` + `SimCore/Invariants.cs` |
+| 单测 | 三条公式各自可测，不启动渲染 | ✅ 公式一 ✅、公式二（价格）✅、公式三 ✅、人口 ✅ | `CoreBasicTests` |
+| 不变量 | 物资/人口/银守恒、价格区间、状态机不越级 | 🟡 范围与符号 ✅（`basic.ranges`）、变更必带 reason ✅、物资守恒（`basic.conservation`）✅、价格区间（`basic.price_bounds`）✅、状态机单调（`class_monotonic`）✅；**银守恒与人口守恒没有**（M4 切片二 / M5） | `BasicPlugin.Sanity` + `SimCore/Invariants.cs` |
 | 确定性 | 同种子同命令流 → 状态哈希一致 | ✅ 逐回合比，不是只比末态 | `AcceptanceTests` + `sim hash` |
 | 存档 | save → load → replay 同命令流 → 哈希一致 | ✅ 含「第 K 回合档 + 后续命令 = 一口气跑满」与坏档不覆盖 | `AcceptanceTests` + `sim replay` |
 | 平衡 | 固定种子 20 国 120 年，单一策略胜率 > 55% 即返工 | ⛪ 无 AI 国家、无策略（M9 起才有意义） | — |
@@ -41,7 +41,7 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 
 ---
 
-## 2. 86 条的分层清单
+## 2. 95 条的分层清单
 
 ### `FixTests.cs`（12 条）· 定点数本体
 
@@ -74,7 +74,7 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 `System.Text.Json` 一声不响地落回默认值 0——优先级、数据包开关这类字段静默失效，
 比崩溃难查一个数量级。现在未知键（`@` 前缀的注释键除外）直接拒载。
 
-### `CoreBasicTests.cs`（24 条）· 规则语义
+### `CoreBasicTests.cs`（33 条）· 规则语义
 
 **地图是32乘20且id与轴坐标互证** · **同种子同图换种子换图** ·
 **地表是GDD九类且每格都命中自己的气候区间** · **温度随纬度升高且九类地表都能长出来** ·
@@ -86,6 +86,10 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 农田折进设施系数且封顶 1_45 · 粮仓同时加仓容与降损耗 · 存粮永远不超过仓容 ·
 丰年人口靠零头攒着往上涨 · **缺粮但不至于饿死时零头桶照样在涨** · 灾年先断粮再减员最后反抗 ·
 满意度向S星收敛且只吃口粮一项 · 国势栏是各城的合计而不是又扫一遍世界。
+
+M3/M4 新增 9 条：粮价初始化且五回合内保持在区间内 · 多种子二十回合粮价始终在区间内 ·
+三十回合守恒不变量不触发 · 灾年粮价涨丰年粮价跌 · 八阶级循环五回合不崩 ·
+满意度满四年跌破三十到暴动档 · 怠工状态下产出折半 · 罢工状态下产出归零 · 四种商品价格都在区间内。
 
 这批里最要紧的设计是 `产出等于公式一的两个上限取小` 与 `满意度向S星收敛且只吃口粮一项`：
 它们在测试里把 GDD 的公式**重新算了一遍**。实现与文档各写一次、结果必须撞在一起，
@@ -130,7 +134,7 @@ dotnet run --project src/HexaCiv.Cli -- hash --seed 7 --turns 6 --script scripts
 Godot .NET 4.7.2 --headless --path src/GodotShell -- --smoke        # Windows 可用 AGENTS.md 中的完整路径
 ```
 
-两边都必须给出末回合哈希 `dbd386ed1bd058de`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
+两边都必须给出末回合哈希 `2e9b047076e49543`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
 `Smoke()` 提交的命令**逐字相同**，改一边就要改另一边，否则这条比对立刻红）。
 Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 点）、字体回退、`SMOKE PASS`。
 
@@ -185,7 +189,7 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 |---|---|---|
 | `build-test` | `dotnet build` + `dotnet test --no-build` | 单元/契约/验收任一红。注意 `Directory.Build.props` 里 `TreatWarningsAsErrors=true`，警告也算红 |
 | `sim-headless` | `sim check` → `sim hash --seed 99 --turns 50` → `sim replay --seed 5 --turns 20 --at 12` → `sim run --seed 42 --turns 200 --headless --out` 并上传报告 | 确定性、回放等价、或基线报告无法生成 |
-| `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `dbd386ed1bd058de`，并上传对账日志 |
+| `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `2e9b047076e49543`，并上传对账日志 |
 
 2026-11-13 在 Windows 宿主 #2 按上述步骤复验通过，两个 Godot 官方下载地址均返回 200。
 **远端首跑尚未执行，所以 M0 仍为 🟡，不能写成 CI 已绿。** CI 里第一个 Linux 绿的哈希必须当场抄进

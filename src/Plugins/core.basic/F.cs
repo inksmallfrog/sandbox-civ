@@ -70,11 +70,19 @@ public static class F
     public static string TownRation(string classDefId) => "town.ration." + Bare(classDefId);
     public static string TownGrowth(string classDefId) => "town.growth." + Bare(classDefId);
     public static string TownStatus(string classDefId) => "town.status." + Bare(classDefId);
+    public static string TownStatusPrev(string classDefId) => "town.statusPrev." + Bare(classDefId);
+    public static string TownWealth(string classDefId) => "town.wealth." + Bare(classDefId);
     public static string TownBuilding(string buildingDefId) => "town.building." + Bare(buildingDefId);
     public static string TownStock(string goodDefId) => "town.stock." + Bare(goodDefId);
     public static string TownStockCap(string goodDefId) => "town.stockCap." + Bare(goodDefId);
     public static string TownSpoilage(string goodDefId) => "town.spoilage." + Bare(goodDefId);
     public static string TownOutput(string goodDefId) => "town.output." + Bare(goodDefId);
+    public static string TownPrice(string goodDefId) => "town.price." + Bare(goodDefId);
+    public static string TownDemand(string goodDefId) => "town.demand." + Bare(goodDefId);
+    public static string TownSupply(string goodDefId) => "town.supply." + Bare(goodDefId);
+    public static string TownConsumed(string goodDefId) => "town.consumed." + Bare(goodDefId);
+    public static string TownSpoiled(string goodDefId) => "town.spoiled." + Bare(goodDefId);
+    public static string TownSpilled(string goodDefId) => "town.spilled." + Bare(goodDefId);
 
     // ---- 国家 ----
     public const string NationName = "nation.name";
@@ -91,6 +99,7 @@ public static class F
     public const string ReportStock = "report.food.stock";
     public const string ReportMinSat = "report.minSat";
     public const string ReportUnrest = "report.unrest";
+    public const string ReportFoodPrice = "report.food.price";
 
     /// <summary>去掉数据包 id 的类型前缀：<c>class.peasant</c> → <c>peasant</c>。</summary>
     public static string Bare(string defId)
