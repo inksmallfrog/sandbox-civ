@@ -10,35 +10,37 @@
 
 ## 0. 一分钟版
 
-- **M1 Core 立住，M2 地图骨架（32×20）+ 九类地表/气候完成，M3 单镇经济（公式二 + 守恒等式）完成**，
-  M0 只差 CI 首次远端双系统全绿。三 job × ubuntu/windows 工作流已补；69 条测试与宿主 #1 的基线当场复验过（§1 表格）。
+- **M1 Core 立住，M2 地图骨架（32×20）+ 九类地表/气候完成，M3 公式二 + 守恒完成，M4 切片一（八阶级循环 + 状态机五档 + 多商品价格）完成**，
+  M0 只差 CI 首次远端双系统全绿。三 job × ubuntu/windows 工作流已补；74 条测试与宿主 #1 的基线当场复验过（§1 表格）。
 - **接手第一件事不是写代码，是识别宿主并跑 §6 的复验命令**。按 `DEV_ENVIRONMENTS.md` 探测 OS、.NET SDK 与 Godot .NET 版本；有对不上的，先修环境再动代码——
   这个仓库的正确性主张全靠「同种子同命令流 → 同哈希」撑着，跑不出来时任何改动都无法判断好坏。
 - **读的顺序（§11.4 原文）**：本文件 → `AGENTS.md` → GDD §10 + 附录 A → 要动的子系统章节。
   `AGENTS.md` 里那八条架构原则是本仓库的地契，违反其中任意一条的提交应当被打回，而不是被合并后再修。
 - **不许改 `docs/GDD.md`**（附录 B 第 10 条 + 设计者约束）。和 GDD 有分歧就写进
   `docs/CHANGELOG-DESIGN.md` §1 等裁决，那里已经挂着 D-001…D-004 四条待裁决。
-- **M3 结论**：公式二跑通了，但价格只影响数字不影响行为——等 M5 接进消费分配逻辑才会改变轨迹。
-  守恒等式正常回合零触发，价格区间 clamp 有效。
+- **M4 切片一结论**：八阶级数据落地（class.json 1→8 条），三条公式循环多阶级 × 多商品跑通，
+  状态机从三档升级到五档（怠工/罢工/暴动罚则兑现），价格求解器扩展到 4 种商品。
+  建城时只初始化 peasant，其他 7 阶级 pop=0 自动跳过——单镇轨迹和 M3 基本一致。
+  原料约束（outputCost.*）与解锁闸门（unlockPop > 0）推切片二。
 
 ---
 
-## 1. 仓库实况（2026-11-13 M3 验收后当场核对）
+## 1. 仓库实况（2026-11-13 M4 切片一验收后当场核对）
 
-> 宿主 #1 复核（2026-11-13 M3）：.NET SDK 8.0.428；Godot .NET 4.7.2 位于
-> `E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`。构建、69 条测试、
-> `check/hash/replay`、200 年基线全部通过；CLI 末态哈希 `9fe62d078937e3ef`（M3 更新），
+> 宿主 #1 复核（2026-11-13 M4）：.NET SDK 8.0.428；Godot .NET 4.7.2 位于
+> `E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`。构建、74 条测试、
+> `check/hash/replay`、200 年基线全部通过；CLI 末态哈希 `9c29b42e2868ef10`（M4 更新），
 > Godot 冒烟需重跑（插件 DLL 已更新）。地图形状 32×20，九类地表，MapGenVersion=4。
 
 | 项 | 值 | 复现 |
 |---|---|---|
-| 分支 | `master` 与 `origin/master` 同步在 `f9c2f7d`（M3 提交） | `git branch -vv` |
-| 工作区 | 本轮 M3（公式二 + 守恒 + 4 条测试）已提交，文档改动待提交 | `git status --short` |
-| 测试 | **69 绿，0 跳过**（原有 65 + M3 新增 4） | `dotnet test --nologo` |
-| 确定性自检 | seed 7 / 6 回合末态 `9fe62d078937e3ef`（两遍逐回合全同） | `sim hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` |
-| 200 年基线 | seed 42 末态 `e7e69b15db632966`，`dataHash eebed2c6f0ba30d1`，2 城 / 人口 163 / 最低满意 26.58 | `sim run --seed 42 --turns 200 --headless` |
+| 分支 | `master` 与 `origin/master` 同步在 `f0521a9`（M4 切片一提交） | `git branch -vv` |
+| 工作区 | 本轮 M4 切片一（八阶级 + 状态机五档 + 多商品价格 + 5 条测试）已提交，文档改动待提交 | `git status --short` |
+| 测试 | **74 绿，0 跳过**（原有 65 + M3 新增 4 + M4 新增 5） | `dotnet test --nologo` |
+| 确定性自检 | seed 7 / 6 回合末态 `9c29b42e2868ef10`（两遍逐回合全同） | `sim hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` |
+| 200 年基线 | seed 42 末态 `e824c66acc43569b`，`dataHash 8a19d5bcee5da2fa`，2 城 / 人口 163 / 最低满意 26.58 | `sim run --seed 42 --turns 200 --headless` |
 | 建图耗时 | 约 35 ms / 640 格 | `sim map --seed 7` 的 `core.basic：建图 … ms` |
-| 代码量 | SimCore 20 文件 · core.basic 8（+Pricing）· 测试 69 条 | 排除 bin/obj 后统计 |
+| 代码量 | SimCore 20 文件 · core.basic 8（+Pricing）· 测试 74 条 | 排除 bin/obj 后统计 |
 
 **上面每一个数字都是这次会话里重跑出来的**，不是从旧文档抄的。改动作废它们不算违约，
 但请把 §6 那六条命令当作收工自检跑一遍，把新值写回 `docs/ROADMAP.md` §2 和这里。
@@ -66,13 +68,15 @@
 
 `Sync.cs` / `StateHash.cs` 是第十块砖：分块哈希与联机一致性检查（`NETWORKING.md` §5）。
 
-### 2.2 core.basic（M1+M3 循环的全部规则都在这一个插件里）
+### 2.2 core.basic（M1+M3+M4 循环的全部规则都在这一个插件里）
 
 32×20 矩形六边形图（§3.7 前四步：高度 / 温度 / 降水 / 九类地表，§3.9）→ 建国 → 建城（§3.8 距离闸门）→ 开荒 / 起仓 →
-产粮（公式一，§5.4 步 6 损耗）→ **粮价（公式二，第 6 步 Summer）** → 吃粮 → 配给 → 满意度（公式三 + 正态扰动）→ 人口
-（零头桶累积）→ 不安与反抗计数 → 年报。**三条公式全部实装**（价格已接，M3 完成），21 个落点里挂了 **12** 个
-处理器（+Pricing.Price），3 条命令，**3 组不变量**（+price_bounds + conservation），3 个图层。逐条常数与解析解在 `BALANCE.md` §1/§3。
-**缺口**：价格求解器目前只对粮（good.food）跑，其余商品暂保持 basePrice（M4 八阶级接进循环）；
+**八阶级产出循环（公式一，含状态机罚则）** → **多商品价格（公式二，除 silver 外 4 种商品）** → 多阶级消费 → 配给 →
+满意度（公式三 + **状态机五档**）→ 人口（零头桶累积）→ 不安与反抗计数 → 年报。
+**三条公式全部实装**（价格已接 M3/M4，状态机五档 M4），21 个落点里挂了 **12** 个处理器（+Pricing.Price），
+3 条命令，**4 组不变量**（+price_bounds + conservation + class_monotonic），3 个图层。
+逐条常数与解析解在 `BALANCE.md` §1/§3。
+**缺口**：原料约束（outputCost.*）与解锁闸门（unlockPop > 0）推 M4 切片二；
 价格不影响消费分配逻辑（等 M5 多镇贸易把价格接进口粮分配才会改变轨迹）。
 
 ### 2.3 两个壳层
@@ -94,6 +98,7 @@
 | `1fe9876` | .NET 8 solution + 地图整数定点与存档版本回归 | D-031 / D-032 |
 | 本轮 CI | 三 job × ubuntu/windows 工作流 + Windows #2 等价复验 + 更正 seed 99 文档基线 | D-032（补漏记基线）；CI 本身数值零变化 |
 | `f9c2f7d` | M3 单镇经济：公式二 + 守恒等式 + 价格区间不变量 + 4 条测试 | **D-035**（见 CHANGELOG-DESIGN.md §3，含完整模拟差异表） |
+| `f0521a9` | M4 切片一：八阶级循环 + 状态机五档 + 多商品价格 + 5 条测试 | **D-036**（见 CHANGELOG-DESIGN.md §3） |
 | 本轮 M2-1 | 地图 32×20 矩形 + `MapGenVersion=3` + `sim map` 建图计时 + Godot 缩放/拾取适配 + 3 条地图测试 | D-033（附全基线重排表） |
 | 本轮 M2-2 | 九类地表 + 温度/降水分类（数据声明 class.* 区间）+ `MapGenVersion=4` + 2 条气候测试 | D-034（附全基线重排表） |
 
@@ -235,7 +240,7 @@ M2 切片一改成 32×20 矩形（MapGenVersion=3），切片二接九类地表
 
 ```bash
 dotnet build -v q --nologo                          # 0 错误（warning = error，坑 9）
-dotnet test --nologo                                # 65 绿
+dotnet test --nologo                                # 74 绿
 dotnet build src/GodotShell/HexaCiv.GodotShell.csproj # GodotShell 不在 solution，单独编译以免加载旧 DLL
 dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
 dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12
