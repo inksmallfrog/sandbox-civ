@@ -9,7 +9,7 @@
 
 ## 0. 一分钟版
 
-- **M1 Core、M2 地图、M3 公式二 + 守恒、M4 切片一/切片二已完成并当场复验；M0 的 CI 配置已补，待首次远端双系统全绿**（§2 有逐条证据）。当前 `dotnet test` = 97 绿。
+- **M1 Core、M2 地图、M3 公式二 + 守恒、M4 切片一/切片二已完成并当场复验；M0 的 CI 配置已补，待首次远端 Windows 全绿**（§2 有逐条证据）。当前 `dotnet test` = 97 绿。
 - **M2 的四个切片都已落地**：32×20 形状、九类地表 + 温度/降水、河网 + 水体、十二形胜 + 五种门槛资源 + 5 个图层。
   「同形胜在 20 张图里人工可认出」的机器侧证据是测试 `二十个种子里十二种形胜都出现过`，
   人工目检材料在 `analysis/out/m2-shapes.txt`（`sim map --seed 1..20` 的 ASCII）。
@@ -28,7 +28,7 @@
 
 | 里程碑 | 交付（§12 原文摘要） | 验收标准 | 标签 | 状态 |
 |---|---|---|---|---|
-| **M0 骨架** | 仓库结构、Godot+SimCore solution、CI（单测 + headless）、13 份文档 | 空世界 1000 回合不崩；CI 绿；文档齐全 | `v0.0` | 🟡 CI 工作流已补，待远端双系统首验（§2.1） |
+| **M0 骨架** | 仓库结构、Godot+SimCore solution、CI（单测 + headless）、13 份文档 | 空世界 1000 回合不崩；CI 绿；文档齐全 | `v0.0` | 🟡 CI 工作流已补并改为 **Windows-only**（Linux 按设计者决定暂不验），待远端 Windows 首验（§2.1） |
 | **M1 Core** | 世界存储、五阶段调度、分层 RNG、数据注册、不变量、存档/命令流、插件宿主 | 同种子同命令流 → 哈希位级相同；非法插件被拒载 | `v0.1` | ✅ 两条都当场复验（§2.2） |
 | **M2 地图** | 六边形渲染、五层数据、生成器（盆地/山谷/河网/隘口）、拾取 | 32×20 生成 < 1s；同形胜在 20 张图里人工可认出；同种子同图 | `v0.2` | ✅ 四个切片全部落地（§2.3）；机器验收 97 绿、建图约 74 ms、CLI/Godot 同哈希，人工目检材料见 `analysis/out/m2-shapes.txt` |
 | **M3 单镇经济** | 一镇、农民、地块潜力、库存、公式一 + 公式二 | 守恒通过；制造一次灾年，价格与库存轨迹符合预期 | `v0.3` | 🟡 **公式二（Pricing.cs）+ 物资守恒（basic.conservation）+ 价格区间（basic.price_bounds）已完成**；但价格不影响消费分配逻辑（等 M5）、银守恒与人口守恒未实现（等 M4–M5） |
@@ -55,7 +55,7 @@
 | 仓库结构 | ✅ | `docs/ARCH.md` §2 的目录树 = `ls` 结果 |
 | Godot + SimCore solution | ✅ | `HexaCiv.sln`（SimCore / core.basic / CLI / tests）；GodotShell 刻意不入 solution，理由见 `ARCH.md` §5 |
 | 文档 13 份（§11.1 要 12 份 + REQUIREMENTS） | ✅ | `docs/`：ARCH · CORE_API · PLUGIN_API · SIM_ORDER · DATA_SCHEMA · SAVE_FORMAT · NETWORKING · BALANCE · ROADMAP · TEST_PLAN · CHANGELOG-DESIGN · AI_HANDOFF = GDD 要求的另外 12 份，一份不缺；第 13 份是 `REQUIREMENTS.md`——§11.1 把 `GDD.md` 自己也算进 13 份里，而它是唯一不需要产出的那一份（且 AI 不得修改） |
-| **CI（单测 + headless）** | 🟡 **待远端首验** | `.github/workflows/ci.yml` 已有 `build-test` / `sim-headless` / `godot-smoke` × ubuntu + windows；Windows 宿主 #2 本地等价步骤通过，但远端双系统尚未实际全绿。命令与判据在 `docs/TEST_PLAN.md` §6 |
+| **CI（单测 + headless）** | 🟡 **待远端 Windows 首验** | `.github/workflows/ci.yml` 有三个 job（`build-test` / `sim-headless` / `godot-smoke`）跑 `windows-latest`；`EXPECTED_SMOKE_HASH` 已对齐 `fc88ca36ce90fb37`。Linux 按设计者 2026-11-13 的决定暂不验，恢复时把三处 `os: [windows-latest]` 改回双系统。命令与判据在 `docs/TEST_PLAN.md` §6 |
 
 **这一条要在 M0 收尾时验收通过再打 `v0.0`**：§12 的推进规则是「验收不通过不许开下一个」。
 工作流入库只消除了配置缺口，不代替 CI 运行证据；首跑全绿后本节才能标 ✅。
@@ -136,7 +136,7 @@ M3 的「守恒通过」还差一项：`basic.ranges` 只管范围与符号，**
 
 | 欠账 | 影响 | 必须还的时点 | 记录在哪 |
 |---|---|---|---|
-| CI 工作流已补但远端双系统首验未执行 | M0 验收不完整；不能把配置存在当成 CI 绿 | **现在**（M0 收尾） | `TEST_PLAN.md` §6 |
+| CI 工作流已补但远端Windows 首验未执行 | M0 验收不完整；不能把配置存在当成 CI 绿 | **现在**（M0 收尾） | `TEST_PLAN.md` §6 |
 | 物资守恒等式（§5.9 第一条）**已实现**，但银守恒与人口守恒（前三条的另外两条）未实现 | 经济类 bug 只能靠范围不变量兜；跨镇贸易/税没接进系统 | M4–M5 | `CHANGELOG-DESIGN.md` D-037 |
 | `SimConfig.YearLimit` 解析了但没人判 | 120/200 年不会自动结束 | M9（时代与结束条件） | `CORE_API.md` §3 |
 | `manifest.data_packs` 解析了但装载器不看 | 卡包/剧本包还不能靠清单开关 | M8（时代卡包） | `PLUGIN_API.md` §4 |

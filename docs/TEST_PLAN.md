@@ -140,7 +140,7 @@ Godot .NET 4.7.2 --headless --path src/GodotShell -- --smoke        # Windows �
 Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 点）、字体回退、`SMOKE PASS`。
 
 这个比对已由 `.github/workflows/ci.yml` 的 `godot-smoke` job 自动化：同一 job 内先跑 CLI，再跑 Godot，
-两边都核对末态哈希，并强制 `grep` `SMOKE PASS`。配置已落地不等于远端已验收，首次双系统运行状态见 §6。
+两边都核对末态哈希，并强制 `grep` `SMOKE PASS`。配置已落地不等于远端已验收，首次 Windows 运行状态见 §6。
 
 ---
 
@@ -181,9 +181,9 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 
 ---
 
-## 6. CI：配置已补，待首次双系统验收
+## 6. CI：配置已补，待首次 Windows 验收
 
-`.github/workflows/ci.yml` 已实现下列三个 job，全部使用 **ubuntu-latest + windows-latest** 矩阵，
+`.github/workflows/ci.yml` 已实现下列三个 job，全部使用 `windows-latest`（Linux 按设计者决定暂不验），
 `fail-fast: false`，避免一个系统先红就吞掉另一个系统的证据：
 
 | job | 步骤 | 挂了意味着 |
@@ -193,7 +193,7 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 | `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `fc88ca36ce90fb37`，并上传对账日志 |
 
 2026-11-13 在 Windows 宿主 #2 按上述步骤复验通过，两个 Godot 官方下载地址均返回 200。
-**远端首跑尚未执行，所以 M0 仍为 🟡，不能写成 CI 已绿。** CI 里第一个 Linux 绿的哈希必须当场抄进
+**远端首跑尚未执行，所以 M0 仍为 🟡，不能写成 CI 已绿。** CI 的 Windows 首跑哈希必须当场抄进
 `docs/BALANCE.md` §4 与 `CHANGELOG-DESIGN.md`，之后它就是基线。在此之前，
 「跨平台一致」是一个尚未验证的假设，不是已完成的事实。
 

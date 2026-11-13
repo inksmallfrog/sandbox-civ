@@ -12,7 +12,10 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_NOLOGO: 1
   GODOT_VERSION: 4.7.2
-  EXPECTED_SMOKE_HASH: 1cd6f74b25e33aa3
+  # 平台范围：**只跑 Windows**（用户 2026-11-13 决定暂不考虑 Linux 兼容性，M0 的
+  # ubuntu 首验先不做）。要恢复双系统时把 [windows-latest] 改回
+  # [ubuntu-latest, windows-latest] 即可，job 本体已按 $IsWindows 分支写好。
+  EXPECTED_SMOKE_HASH: fc88ca36ce90fb37
 
 jobs:
   build-test:
@@ -20,7 +23,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -66,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
