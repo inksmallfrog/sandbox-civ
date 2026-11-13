@@ -506,10 +506,13 @@ public class CoreBasicTests
     /// 「饿而不死」那一档的定点回归。附录 A §8 的 0.04·粮安 在 s = 0.60 时只有 0.008，
     /// 先物化增长率再乘 P 会被 ×100 刻度截成 0，人口从此永久冻死在地块上限上
     /// （seed 42 的 200 年基线在第 83 年卡在 72 个百人单位，就是这个坑）。
-    /// 判据用「第 13 步有没有往零头桶里写东西」，而不是只看年末人口——不进位的年份人口本来就不动。
+    ///
+    /// M4 切片二接上 §4.7 的「拥挤」后，s = 0.60 意味着地只够养六成人，拥挤项盖过粮安项，
+    /// 本年净减员——但零头桶仍然必须<b>落一笔非零</b>的账，而不是被 1/100 刻度截成 0。
+    /// 判据从「必须为正」改成「必须非零且方向与公式一致」。
     /// </summary>
     [Fact]
-    public void 缺粮但不至于饿死时零头桶照样在涨()
+    public void 缺粮时零头桶照样落账而不是被截成零()
     {
         var sim = OneTown(37);
         for (int turn = 1; turn <= 40; turn++) sim.AdvanceTurn();
@@ -527,14 +530,14 @@ public class CoreBasicTests
 
         var r = sim.AdvanceTurn();
         Fix ration = town.GetFix(F.TownRation("class.peasant"), Fix.Zero);
-        Assert.Equal(Fix.FromPercent(60), ration);                       // s = 0.60 ⇒ 粮安 = 0.20 > 0，该长人
+        Assert.Equal(Fix.FromPercent(60), ration);                       // s = 0.60 ⇒ 粮安 = 0.20，拥挤项把它吃掉
 
         var bucket = r.Diffs.FirstOrDefault(d => d.Id == town.Id && d.Path == F.TownGrowth("class.peasant"));
         Assert.True(bucket != default,
-            $"s = {ration.Text}（粮安 0.20）时第 13 步一笔变更都没写：0.04·粮安 = 0.008 被 1/100 刻度截成 0，" +
-            "人口会永久冻死（附录 A §8 要的是 ΔP = P × 粮安 × 4 ÷ 100，先乘 P）");
+            $"s = {ration.Text} 时第 13 步一笔变更都没写：0.04·粮安 被 1/100 刻度截成 0，" +
+            "人口会永久冻死（附录 A §8 要的是 ΔP = P × (4·粮安 − 3·拥挤) ÷ 100，先乘 P）");
         Fix grew = SimValue.ParseCanonical(bucket.After).AsFix() - SimValue.ParseCanonical(bucket.Before).AsFix();
-        Assert.True(grew > Fix.Zero, $"零头桶只加了 {grew.Text}，s = {ration.Text} 时应为 0.04 × 粮安 × P > 0");
+        Assert.True(grew.Raw != 0, $"零头桶加了 {grew.Text}：要么被截成 0，要么公式没跑");
     }
 
     [Fact]
@@ -704,10 +707,9 @@ public class CoreBasicTests
         OneTown(20251113, 5);  // 不 catch，不变量不抛异常 = 通过
     }
 
-    /// <summary>状态机五档：S<30 满 4 年 → 暴动。
-    /// 先清仓底、清零粮潜力（灾年），确保第一年开始 S 就跌到 < 30。</summary>
+    /// <summary>状态机五档：S&lt;30 连续 6 年（每 2 年升一级）→ 暴动。</summary>
     [Fact]
-    public void 满意度满四年跌破三十到暴动档()
+    public void 满意度跌破三十满六年升到暴动档()
     {
         var sim = OneTown(17);
         var town = Town(sim);
@@ -730,52 +732,68 @@ public class CoreBasicTests
     // （class_monotonic 不变量的集成测试跳过：Satisfaction 会覆盖 StatusPrev，
     // 直接的跳级在正常游戏流里不可能发生——由单元测试和手动审查保护。）
 
-    /// <summary>怠工罚则：满 2 年 S<30 → 产出折半（§4.2 状态机罚则由 Produce 的 statusMult 兑现）。
-    /// 手动把状态设为"怠工"，直接验证 Produce 的产出比状态为"服从"时少一半。</summary>
+    /// <summary>怠工罚则：§4.2 表第 1 级「产出 −15%」＝ ×0.85。
+    /// 手动把状态设为「怠工」，用与实现同一条公式重算本年产出，必须撞在一起。</summary>
     [Fact]
-    public void 怠工状态下产出折半()
+    public void 怠工状态下产出打八五折()
     {
         var sim = OneTown(31, 2);
+
+        // 拉高粮潜力，让「人」成为紧约束，只观察 statusMult
+        foreach (var t in Tiles(sim, Town(sim).Id))
+            sim.World.WriteRaw(t.Id, F.HexYieldFood, SimValue.Of(Fix.FromInt(9)));
+
         var town = Town(sim);
+        long pop = town.GetInt(F.TownPop("class.peasant"));
+        Fix sat = town.GetFix(F.TownSat("class.peasant"), Fix.FromInt(50));
+        Fix facility = town.GetFix(F.TownFacility, Fix.One);
+        Fix cap = Fix.Zero;
+        foreach (var t in Tiles(sim, town.Id)) cap += sim.World.GetFix(t.Id, F.HexYieldFood, Fix.Zero);
 
-        // 先读正常产出（状态服从）
-        Fix outputNormal = sim.World.GetFix(town.Id, F.TownOutput("good.food"), Fix.Zero);
+        Fix lambda = sim.Data.Get("class.peasant").GetFix("output.food");
+        Fix eta = Fix.FromPercent(60) + Fix.Mul(Fix.FromPercent(40), Fix.Div(sat, Fix.FromInt(100)));
+        Fix soft = Fix.Mul(Fix.Mul(Fix.FromInt(pop), lambda), Fix.Mul(Fix.FromPercent(85), eta));
+        Fix expected = Fix.Min(soft, Fix.Mul(cap, facility));
+        Assert.True(expected > Fix.Zero, $"期望产出应为正：soft={soft.Text} hard={Fix.Mul(cap, facility).Text}");
 
-        // 手动把状态改成怠工，再跑一年
         sim.World.WriteRaw(town.Id, F.TownStatus("class.peasant"), SimValue.OfStr("怠工"));
         sim.World.WriteRaw(town.Id, F.TownStatusPrev("class.peasant"), SimValue.OfStr("抱怨"));
-        sim.World.WriteRaw(town.Id, F.TownRiot, SimValue.OfInt(2));
-
-        // 把粮潜力恢复，确保产出只由状态控制
-        foreach (var t in Tiles(sim, town.Id))
-            sim.World.WriteRaw(t.Id, F.HexYieldFood, SimValue.Of(Fix.FromInt(1)));
+        sim.World.WriteRaw(town.Id, F.TownRiotOf("class.peasant"), SimValue.OfInt(2));
 
         sim.AdvanceTurn();
-        Fix outputIdle = sim.World.GetFix(town.Id, F.TownOutput("good.food"), Fix.Zero);
-
-        // 怠工状态 mult=50%，所以 outputIdle 应约等于 outputNormal × 0.5
-        // 允许 ±50% 浮动（因为 eta/s 每年会变），只钉方向
-        Assert.True(outputIdle < outputNormal,
-            $"怠工产出 {outputIdle.Text} 应低于正常产出 {outputNormal.Text}（§4.2 怠工罚则）");
+        Fix actual = Town(sim).GetFix(F.TownOutput("good.food"), Fix.Zero);
+        Assert.Equal(expected, actual);
     }
 
-    /// <summary>罢工状态 mult=0 → 产出归零。</summary>
+    /// <summary>罢工罚则：§4.2 表第 2 级「产出 −40%」＝ ×0.60（不再是旧实现的归零）。</summary>
     [Fact]
-    public void 罢工状态下产出归零()
+    public void 罢工状态下产出打六折()
     {
         var sim = OneTown(37, 2);
+
+        foreach (var t in Tiles(sim, Town(sim).Id))
+            sim.World.WriteRaw(t.Id, F.HexYieldFood, SimValue.Of(Fix.FromInt(9)));
+
         var town = Town(sim);
+        long pop = town.GetInt(F.TownPop("class.peasant"));
+        Fix sat = town.GetFix(F.TownSat("class.peasant"), Fix.FromInt(50));
+        Fix facility = town.GetFix(F.TownFacility, Fix.One);
+        Fix cap = Fix.Zero;
+        foreach (var t in Tiles(sim, town.Id)) cap += sim.World.GetFix(t.Id, F.HexYieldFood, Fix.Zero);
+
+        Fix lambda = sim.Data.Get("class.peasant").GetFix("output.food");
+        Fix eta = Fix.FromPercent(60) + Fix.Mul(Fix.FromPercent(40), Fix.Div(sat, Fix.FromInt(100)));
+        Fix soft = Fix.Mul(Fix.Mul(Fix.FromInt(pop), lambda), Fix.Mul(Fix.FromPercent(60), eta));
+        Fix expected = Fix.Min(soft, Fix.Mul(cap, facility));
+        Assert.True(expected > Fix.Zero, $"罢工不再把产出打成 0：soft={soft.Text} hard={Fix.Mul(cap, facility).Text}");
 
         sim.World.WriteRaw(town.Id, F.TownStatus("class.peasant"), SimValue.OfStr("罢工"));
         sim.World.WriteRaw(town.Id, F.TownStatusPrev("class.peasant"), SimValue.OfStr("怠工"));
-        sim.World.WriteRaw(town.Id, F.TownRiot, SimValue.OfInt(3));
-
-        foreach (var t in Tiles(sim, town.Id))
-            sim.World.WriteRaw(t.Id, F.HexYieldFood, SimValue.Of(Fix.FromInt(2)));
+        sim.World.WriteRaw(town.Id, F.TownRiotOf("class.peasant"), SimValue.OfInt(4));
 
         sim.AdvanceTurn();
-        Fix output = sim.World.GetFix(town.Id, F.TownOutput("good.food"), Fix.Zero);
-        Assert.True(output.IsZero, $"罢工产出应为 0，实际 {output.Text}（§4.2 罢工罚则）");
+        Fix actual = Town(sim).GetFix(F.TownOutput("good.food"), Fix.Zero);
+        Assert.Equal(expected, actual);
     }
 
     /// <summary>五种商品（除 silver）都跑价格求解，且 clamp 有效（价格在 [0.2×p0, 5×p0] 内）。</summary>
@@ -796,5 +814,54 @@ public class CoreBasicTests
             Assert.True(p >= lo && p <= hi,
                 $"{goodId} 价格 {p.Text} 越出 [{lo.Text}, {hi.Text}]（§5.9 第四条价格区间 clamp 应兜住）");
         }
+    }
+
+    /// <summary>§4.4 解锁链 + §4.7 转化：建作坊 → 工人解锁 → 农民逐年转出。</summary>
+    [Fact]
+    public void 建作坊后工人解锁并从农民转出()
+    {
+        var sim = OneTown(61, 40);
+        var town = Town(sim);
+        long popBefore = town.GetInt(F.TownPop("class.peasant"));
+        Assert.True(popBefore >= 6, $"40 年只长到 {popBefore} 个百人单位，建不了作坊（requiresPop=6）");
+
+        // 均衡态下存粮被仓满抛洒清空，补一笔营造费再建作坊（§5.5 基建）
+        sim.World.WriteRaw(town.Id, F.TownStock("good.food"), SimValue.Of(Fix.FromInt(30)));
+        sim.SubmitTarget("host", "building.build", "建作坊",
+            ("town", "auto"), ("building", "def:building.workshop"));
+        Assert.Single(sim.AdvanceTurn().Commands, c => c.Accepted);
+
+        for (int t = 0; t < 40; t++) sim.AdvanceTurn();
+
+        town = Town(sim);
+        Assert.True(town.Get(F.TownUnlocked("class.worker")).AsBool(),
+            "作坊建好后工人应解锁（§4.4：作坊 + 器需求，M4 以作坊为准）");
+        Assert.True(town.GetInt(F.TownPop("class.worker")) > 0,
+            "解锁后 §4.7 的转化应把农民转成工人（工人人口只能由转化产生）");
+        Assert.True(town.GetInt(F.TownPop("class.peasant")) > 0, "转化必须给农民留人，否则没人种地");
+    }
+
+    /// <summary>§4.3 原料约束：工人产器耗料 1.2/人/年，料为 0 时器产出必须是 0。</summary>
+    [Fact]
+    public void 工人没有料就产不出器()
+    {
+        var sim = OneTown(67, 2);
+        var town = Town(sim);
+
+        // 直接摆一个 2 个百人单位的工人（解锁链由上面那条测试覆盖）
+        sim.World.WriteRaw(town.Id, F.TownPop("class.worker"), SimValue.OfInt(2));
+        // 辖地不产料，仓里也没料 ⇒ 工人拿不到原料
+        foreach (var t in Tiles(sim, town.Id))
+            sim.World.WriteRaw(t.Id, F.HexYieldMat, SimValue.Of(Fix.Zero));
+        sim.World.WriteRaw(town.Id, F.TownStock("good.mat"), SimValue.Of(Fix.Zero));
+
+        sim.AdvanceTurn();
+        Assert.Equal(Fix.Zero, Town(sim).GetFix(F.TownOutput("good.goods"), Fix.Zero));
+
+        // 补料后同一批工人就能产器（ratio = 1.00）
+        sim.World.WriteRaw(Town(sim).Id, F.TownStock("good.mat"), SimValue.Of(Fix.FromInt(10)));
+        sim.AdvanceTurn();
+        Assert.True(Town(sim).GetFix(F.TownOutput("good.goods"), Fix.Zero) > Fix.Zero,
+            "料够时工人必须产出器（§4.3 / §4.9 的器产出算例）");
     }
 }

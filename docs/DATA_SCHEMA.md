@@ -100,10 +100,12 @@ data/
 
 ```
 数据包 E:\project\sandbox-civ\data
-  ✓ 37 条记录 / 1 个包（core.basic）
-  dataHash = 1c451f9a3d142d7e
-    building   3 条：building.farm, building.granary, building.workshop
-    class      1 条：class.peasant
+  ✓ 50 条记录 / 1 个包（core.basic）
+  dataHash = 495c26d59b6e2362
+    building   9 条：building.academy, building.barracks, building.farm, building.granary, building.market,
+                     building.temple, building.theater, building.towncenter, building.workshop
+    class      8 条：class.artist, class.bureaucrat, class.merchant, class.peasant, class.priest,
+                     class.scholar, class.soldier, class.worker
     good       5 条：good.food, good.goods, good.lux, good.mat, good.silver
     landform   9 条：landform.coast, landform.desert, landform.forest, landform.grassland, landform.hill,
                      landform.mountain, landform.plain, landform.tundra, landform.wetland
@@ -115,7 +117,7 @@ data/
 
 （`dataHash` 是「id → 标量表规范化串」的 FNV 混合（`BuildDataHash`），
 它进存档头部也进不变量：**同数据不同 hash 说明有人改了数据包**，插件的行为必须跟着改。
-上面的数字是 M2 切片四之后的实况，改数据后必须回来更新这一段——`sim check` 是它的生成源。）
+上面的数字是 M4 切片二之后的实况，改数据后必须回来更新这一段——`sim check` 是它的生成源。）
 
 各表的字段意图（数值本身属于 GDD §3.2/§4.3/§5.1/§5.7，改数走 `CHANGELOG-DESIGN`）：
 
@@ -125,9 +127,9 @@ data/
 | `waterbody` | `potential.food`、`color` | `MapGen` 写进 `hex.water` 并覆盖该格 `hex.yield.food`（§3.2 水域行）；`color` 只给壳层 |
 | `shape` | `yield.food/mat`（倍率）、`bonus.food/mat`（加性）、`moveFactor`、`defenseFactor`、`priority`、`glyph`、`color` | `MapGen` 按 §3.6 写 `hex.yield.*`/`hex.moveCost`/`hex.defense`，`hex.shape` 存标签；`glyph/color` 只给壳层；`priority` 决定同格冲突 |
 | `resource` | `yield.food/mat`（倍率）、`bonus.food`（渔汛 +1）、`glyph`、`color` | `MapGen` 按 §3.6 写倍率、按 §3.5 写 `hex.resource`；`glyph/color` 只给壳层 |
-| `class` | `labor`、`output.food`、`consumes.food`、`satisfaction.expects/baseline`、`status`、`taxWeight`、`unlockPop` | `SeasonRules` 的公式一/三；`taxWeight` 目前只读不结算 |
+| `class` | `labor`、`output.food/mat/goods/silver`、`outputCost.*`、`consumes.*`、`satisfaction.expects/baseline`、`status`、`taxWeight`、`unlockPop/Building/Towns/Resource/Surplus/Demand.*`、`shareTarget` | `SeasonRules` 的公式一（含 §4.3 原料约束）与公式三；`TownOps.Unlocks` 读 `unlock*`（§4.4）；`SeasonRules.Convert` 读 `shareTarget`（§4.7 占位，D-041）；`taxWeight` 目前只读不结算 |
 | `good` | `unit`、`basePrice`、`stockCapPerPop`、`spoilage`、`essential` | `TownOps`（仓容/损耗）；`basePrice` 到 M3 才进求解器 |
-| `building` | `slot`(`hex`/`town`)、`cost.food`、`upgradeCost.food`、`maxLevel`、`facility`、`stockCap`、`spoilageCut`、`maintenance.food`、`requiresPop`、`requiresBuilding` | `TownOps.Found/Build/Facilities` |
+| `building` | `slot`(`hex`/`town`)、`cost.food`、`upgradeCost.food`、`maxLevel`、`facility`、`alphaBonus`、`stockCap`、`spoilageCut`、`maintenance.food`、`requiresPop`、`requiresBuilding` | `TownOps.Found/Build/Facilities`；`alphaBonus` 被 `Pricing.Price` 读进本地价格弹性 α（§4.8 市场 +0.05/级）；`unlockBuilding` 反向被 class 引用 |
 
 M2 **已经接上**：`potential.mat`（`hex.yield.mat`）、形胜与资源倍率、资源标签。
 **还没接**的内容（`docs/ROADMAP.md` 按里程碑列）：铁/马/盐/香料的门槛（M7/M5/M3）、

@@ -62,6 +62,19 @@
   原 `Readme.md` 的需求原文挪到 `docs/REQUIREMENTS.md` 存档，根目录 `Readme.md` 重写为
   「这是什么 + 怎么跑起来 + 文档地图」，不再作为规则来源。
 
+### D-041 阶级转化的「吸引力」与「住房容量」在 GDD 里没有可算的定义
+
+- 类型：数值 / 状态：**待裁决**
+- 冲突：§4.7 给了 `吸引力 = 收入 + 就业 + 地位 + 福利 − 生活成本 − 风险`，但其中「收入 / 工资」
+  要到 §2.3 第 9 步的发放（M5）才有数；同一节的 `拥挤 = max(0, 总人口 / 住房容量 − 1)`
+  也没说住房容量从哪来（§4.8 的建筑表里没有住房类建筑）。
+- 实现方当前的占位（见 D-040）：
+  1. `class.json` 的 `shareTarget`（各阶级占总人口的目标份额）代替吸引力差额；
+  2. 住房容量 = 辖地自然粮潜力 ÷ 人均口粮（不乘 Facility）。
+- 影响：200 年基线在人口 ≈117（两城合计）、最低满意 ≈30–42 处稳定，不再死亡螺旋；
+  但这不是「吸引力」的真相。等 M5 的工资/物价接上后应换成 §4.7 的原式，
+  届时 `shareTarget` 若要保留，应作为「目标结构」而不是「吸引力」的替身重新定义。
+
 ---
 
 ## 2. 与 GDD 字面不一致的实现偏差（已实现，等确认）
@@ -267,6 +280,68 @@
   - `sim hash --seed 7 --turns 6` — 两遍同 9c29b42e2868ef10
   - `sim run --seed 42 --turns 200` — 两遍同 e824c66acc43569b
   - `sim run --no-plugins --no-data --turns 1000` — 无崩溃
+
+### D-040 M4 切片二：罚则对齐 + 分阶级反抗 + 解锁链 + 阶级转化 + 原料约束 + 死亡螺旋
+
+- 日期：2026-11-13 / 类型：规则 + 数值 / 状态：已实现（M4 切片二）
+- **为什么改**：D-038 的切片一把 §4.2 的罚则写重了（怠工 −50%、罢工 −100%），把
+  「连续 2 年 S<30 才升一级」（§4.2 原文）实现成「每年一档」，反抗计数还是全局一个；
+  §4.4 的解锁链、§4.7 的阶级转化、§4.9 的料/器算例、§4.3 的 `outputCost.*` 全部欠账。
+  这些欠账合在一起，让 seed 42 的 200 年基线从第 108 年起产出归零、人口从 151 坍缩到 6。
+
+- **改了什么**：
+  - `SeasonRules.Produce` 的 `statusMult` 改为 §4.2 表原值：怠工 **0.85**、罢工/暴动 **0.60**
+    （GDD 没定义暴动的产出，先沿用罢工档，记在 D-040 的待确认项里）。
+  - `SeasonRules.Produce` 拆成两趟：第一趟粮/料受 `Cap × Facility` 硬上限（§4.9 的
+    `min(6×0.9×0.8, 2×1.0)`）；第二趟器/奢先按 `outputCost.*` 扣原料，再按
+    `min(1, 可用料 / 需料)` 缩放产出（§4.3 工人产器耗料 1.2/人/年）。
+  - `SeasonRules.Satisfaction`：反抗计数从全局 `town.riot` 改为**分阶级** `town.riot.<阶级>`；
+    升级档位改为 `连续年数 ÷ 2`（§4.2「连续 2 年才升一级」：第 2 年怠工、第 4 年罢工、第 6 年暴动）；
+    `town.riot` 保留为「本城最长连续年数」的聚合值给年报与旧读者。
+  - `SeasonRules.Satisfaction` 新增 §4.2 的**暴动 3 年控制权倒计时** `town.countdown`：
+    归零时该城清空 `town.owner`、治权置 `independent`，并把暴动阶级降回罢工（「让步」选项）。
+    镇压要军力（M7），M4 只有让步这一条路。
+  - `TownOps.Unlocks`（第 2 步末、Facilities 之后）：按 `class.json` 的
+    `unlockPop / unlockBuilding / unlockTowns / unlockResource / unlockSurplus / unlockDemand.<商品>`
+    判定并粘住 `town.unlocked.<阶级>`。
+  - `SeasonRules.Convert`（第 13 步、增长之后）：已解锁阶级朝 `shareTarget` 收敛，
+    单阶级单年 ≤ 总人口 2%，从农民池出人、农民至少留 1 个百人单位；零头进 `town.convert.<阶级>`。
+  - `SeasonRules.Demography` 接上 §4.7 的**拥挤**项：`拥挤 = max(0, 总人口 / 住房容量 − 1)`，
+    住房容量 = 辖地自然粮潜力 ÷ 人均口粮（占位，见 D-041）。增长率改成
+    `ΔP = P × (4·粮安 − 3·拥挤) ÷ 100`，仍然「先乘 P、最后只截一次」。
+  - `data/core.basic/class.json`：农民接上 §4.3 的料产出 0.9 / 耗料 0.2；八阶级补 `unlock*` 与 `shareTarget`。
+  - `data/core.basic/building.json`：补 §4.8 的市场 / 城镇中心 / 神庙 / 学宫 / 兵营 / 剧院；
+    §4.8 的「料/器/银」造价按农田既有折算（银 ÷ 10）换成 `cost.food`，多商品造价等 M5。
+  - `Pricing.Price`：α 从常量 0.30 改为 `0.30 + Σ(alphaBonus × 等级)`，市场每级 +0.05（§4.8）。
+  - `F.cs`：新增 `TownRiotOf / TownUnlocked / TownConvert / TownCountdown`。
+  - `BasicPlugin.Sanity`：新增「反抗年数非负」「状态必须落在 §4.2 五档」两条范围检查。
+  - `data/_schema.json`：class 增加 `unlockTowns / unlockBuilding / unlockResource / unlockSurplus / shareTarget`
+    与 `unlockBuilding → building` 引用；building 增加 `alphaBonus`。
+
+- **与 GDD 字面不一致、需要设计者确认的代理**（都写在 D-041 或这里）：
+  - 工人的「器需求 ≥ 1」在工人出现前无解（需求由工人自己消费产生）→ M4 只判「建作坊」。
+  - 商人的「与另一镇连通」→ M5 才有道路/贸易，M4 用「世界上至少 2 座城」代理。
+  - 学者的「文字」→ M6 科技卡，M4 只判学宫；祭司/文艺家的「剩余」用城内存粮代理；
+    文艺家的「规模 ≥ 20」用人口 20 个百人单位代理。
+  - 建筑造价只有粮（§4.8 是料/器/银）。
+
+- **模拟差异（D-038 → D-040）**：
+  - 罚则变轻 + 分阶级计数 + 拥挤项，使 seed 42 的 200 年基线**不再死亡螺旋**：
+    末态从「2 城 / 人口 6 / 粮产 0」变成「2 城 / 人口 117 / 粮产 82.05 / 最低满意 26.4」，
+    第 100–200 年人口稳定在 111–119，失业与反抗不再单向恶化。
+  - 200 年基线的中间态仍会在粮价、满意度上波动（ξ 与价格 shock 未变），
+    但人口不再跨过不可逆的坍缩点；这是「有界的坏均衡」，不是「螺旋」。
+
+- **回归结果**：
+  - `dotnet build` — 0 error / 0 warning
+  - `dotnet test` — **97/97** 全绿（原 95 条改名 2 条 + 新增 2 条：`建作坊后工人解锁并从农民转出`、`工人没有料就产不出器`）
+  - `sim check` — 15 步 / 21 落点（7 个不落在任何步骤），**dataHash = 495c26d59b6e2362**
+  - `sim hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` — 末态 **fc88ca36ce90fb37**，
+    Godot 4.7.2 无头冒烟同值、`SMOKE PASS`、拾取 1920/1920
+  - `sim hash --seed 99 --turns 50` — 末态 **4e1f5c96888da71f**（两遍同值）
+  - `sim replay --seed 5 --turns 20 --at 12` — 快照往返 **1ad5c84b9f9e468b**；续跑 = 一口气跑满 **f5fda8d1f5f68d3f**
+  - `sim hash --seed 42 --turns 200` — 末态 **c627c4d01388e426**（两遍同值；CSV 末行 2 城 / pop 117）
+  - **SimCore 零改动**，所有改动在插件层与数据层；hook 落点表不变。
 
 ---
 

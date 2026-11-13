@@ -1,6 +1,9 @@
 {
   "@comment": [
     "GDD §5.7 数值基线里的建筑起点。M1 只放两种：农田（进设施系数）、粮仓（降损耗、加仓容）。",
+    "M4 切片二补齐 §4.8 的六种解锁建筑（市场/城镇中心/神庙/学宫/兵营/剧院）。",
+    "§4.8 的造价是「料/器/银」，本仓库 M4 只有粮库存，按既有农田的折算比例（银 ÷ 10）换成 cost.food；",
+    "多商品造价（cost.mat / cost.goods / cost.silver）等 M5 国库与银流接上再拆（CHANGELOG-DESIGN D-040）。",
     "slot 概念照 §3.7 第 5 步：hex = 盖在地块上（辖地内），town = 盖在城镇本体上。",
     "facility 即 §4.2 的 Facility = 1 + 0.15 × 产业设施等级；这里是每级的增量，农田用 0.15，上限 3 级正好 1.45。",
     "维护费照 §5.5「建筑造价的 20%/年」；M4 的国库才会真的扣银，M1 先只算粮。"
@@ -19,6 +22,25 @@
       "cost.food": 6.00, "upgradeCost.food": 8.00, "maxLevel": 3,
       "facility": 0.10, "maintenance.food": 1.20, "requiresPop": 6,
       "requiresBuilding": "def:building.farm",
-      "@note": "工人阶级的解锁前提（§4.4）；M3 才真正产出器，这里先占住数据位" }
+      "@note": "工人阶级的解锁前提（§4.4）；M3 才真正产出器，这里先占住数据位" },
+
+    { "id": "building.market", "title": "市场", "slot": "town",
+      "cost.food": 5.00, "maxLevel": 1, "requiresPop": 6, "alphaBonus": 0.05,
+      "@note": "§4.8 市场（10/5/50 料/器/银 → 本仓库按银/10 折粮 5.00）；商人解锁；本地价格弹性 α +0.05" },
+    { "id": "building.towncenter", "title": "城镇中心", "slot": "town",
+      "cost.food": 8.00, "maxLevel": 1, "requiresPop": 8,
+      "@note": "§4.8 城镇中心（20/10/80 → 8.00）；官僚解锁；AP +10% 归 M9" },
+    { "id": "building.temple", "title": "神庙", "slot": "town",
+      "cost.food": 6.00, "maxLevel": 1,
+      "@note": "§4.8 神庙（18/6/60 → 6.00）；祭司解锁；信仰与反抗阈值 30→25 归 M7" },
+    { "id": "building.academy", "title": "学宫", "slot": "town",
+      "cost.food": 9.00, "maxLevel": 1,
+      "@note": "§4.8 学宫（20/12/90 → 9.00）；学者解锁；知识 +20% 归 M6" },
+    { "id": "building.barracks", "title": "兵营", "slot": "town",
+      "cost.food": 7.00, "maxLevel": 1,
+      "@note": "§4.8 兵营（15/10/70 → 7.00）；军人解锁；兵源上限 +2 归 M7" },
+    { "id": "building.theater", "title": "剧院/学园", "slot": "town",
+      "cost.food": 11.00, "maxLevel": 1, "requiresPop": 20,
+      "@note": "§4.8 剧院/学园（25/15/110 → 11.00）；文艺家解锁；文化 +25% 归 M8" }
   ]
 }

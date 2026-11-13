@@ -35,8 +35,8 @@
   "worldSeed": "7",            // 注意：字符串（ulong 超过 JS 安全整数）
   "turn": 12,
   "yearBase": 1,
-  "dataHash": "1c451f9a3d142d7e",     // 数据包摘要：档与数据不同源时报警
-  "snapshotHash": "e9962eacb7b9402b", // 写档时的 StateHash.Total
+  "dataHash": "495c26d59b6e2362",     // 数据包摘要：档与数据不同源时报警
+  "snapshotHash": "1ad5c84b9f9e468b", // 写档时的 StateHash.Total
   "savedUtc": "…",                      // 🟡 M1 永远缺席：两个壳层都不填，Core 禁止读时钟
   "pluginVersions": { "core.basic": "0.1.0" },
   "kindCounters":  { "hex": 640, "town": 1, "nation": 1 },  // 缺了它重开后会撞 id
@@ -136,9 +136,9 @@ public static class MigratorChain { Register(m); Registered; Clear();
 ## 6. 等价性自检（`sim replay`）
 
 ```
-第 12 回合快照往返　　：✓ e9962eacb7b9402b
-一口气跑满 20 回合　　：1bf10ff00577dfca
-存第 12 回合后续跑 8 回合：1bf10ff00577dfca
+第 12 回合快照往返　　：✓ 1ad5c84b9f9e468b
+一口气跑满 20 回合　　：f5fda8d1f5f68d3f
+存第 12 回合后续跑 8 回合：f5fda8d1f5f68d3f
 ✓ 存档续跑等价（§10.6）
 ```
 

@@ -1,14 +1,18 @@
 {
   "@comment": [
     "GDD §4.3 八阶级数据表。所有数值照抄该表，是标定起点不是真理（§4.3 脚注）。",
-    "M4 切片一：全部 8 阶级先 unlocked（unlockPop=0），解锁闸门推切片二。",
-    "祭司/学者/文艺家/军人的非物质产出（信仰/知识/文化/战力）切片一先 stub：有消费无产出，",
-    "因为这些产出要等 M6/M7/M8 才有实际系统支撑。农民的非粮产出（料 0.9）同理切片一不接——",
-    "M4 切片一先让「每人每年产/耗 N 单位商品」循环起来，原料约束与产能上限逐阶级精修。",
+    "M4 切片二：解锁闸门按 §4.3/§4.4 接上——unlockPop / unlockBuilding / unlockTowns /",
+    "unlockResource / unlockSurplus / unlockDemand.<商品> 六类条件由 TownOps.Unlocks 在第 2 步末判定。",
+    "shareTarget 是 §4.7 阶级转化的占位标定（GDD 的驱动量「阶级吸引力」要等 M5 收入数据），",
+    "含义是「该阶级占总人口的目标份额」，单年仍受 §4.7 的「单阶级 ≤ 总人口 2%」上限约束。",
+    "见 CHANGELOG-DESIGN D-041 待裁决。",
+    "",
+    "农民的非粮产出（料 0.9）与耗料（0.2）照 §4.3 表接上；料的硬上限是辖地 ΣY_mat × Facility（§4.9 算例）。",
+    "祭司/学者/文艺家/军人的非物质产出（信仰/知识/文化/战力）仍 stub：有消费无产出，等 M6/M7/M8。",
     "",
     "output.* 键：schema required output.food，所以所有阶级都显式写它；非粮产出也写在这里（output.mat / output.goods 等）。",
     "consumes.* 键：同理 required consumes.food，所以所有阶级都显式写它；多商品篮子用 consumes.mat / consumes.goods / consumes.lux / consumes.silver。",
-    "outputCost.* 键：工人等有原料约束的阶级写在这里（工人产器耗料 1.2），schema 不校验，运行时循环 outputCost.* 前缀读取。",
+    "outputCost.* 键：有原料约束的阶级写在这里（工人产器耗料 1.2），运行时循环 outputCost.* 前缀读取。",
     "satisfaction.baseline / taxWeight：可选整数与定点，阶级状态机与税制在 M4/M5 接入。"
   ],
   "type": "class",
@@ -18,15 +22,15 @@
       "title": "农民",
       "labor": 1.00,
       "output.food": 2.40,
-      "output.mat": 0.00,
+      "output.mat": 0.90,
       "consumes.food": 1.00,
-      "consumes.mat": 0.00,
+      "consumes.mat": 0.20,
       "satisfaction.expects": 0.85,
       "satisfaction.baseline": 50,
       "status": 0,
       "taxWeight": 1.00,
       "unlockPop": 0,
-      "@note": "第一产业主力；GDD §4.3 表第一行。非粮产出（料 0.9）M4 切片二接入"
+      "@note": "第一产业主力；GDD §4.3 表第一行。粮 2.4 + 料 0.9，耗粮 1.0 + 料 0.2"
     },
     {
       "id": "class.worker",
@@ -42,7 +46,9 @@
       "status": 0,
       "taxWeight": 1.00,
       "unlockPop": 0,
-      "@note": "第二产业；GDD §4.3 表第二行。outputCost.mat = 1.2 表示产器耗料 1.2/人/年"
+      "unlockBuilding": "def:building.workshop",
+      "shareTarget": 0.12,
+      "@note": "第二产业；GDD §4.3 表第二行 + §4.8/§4.4：作坊解锁。outputCost.mat = 1.2；『器需求≥1』在工人出现前无解，M4 先只判作坊（D-040）"
     },
     {
       "id": "class.merchant",
@@ -57,7 +63,10 @@
       "status": 0,
       "taxWeight": 0.80,
       "unlockPop": 0,
-      "@note": "贸易执行者；GDD §4.3 表第三行。output.silver 是贸易净收入，切片一 stub 无产出"
+      "unlockBuilding": "def:building.market",
+      "unlockTowns": 2,
+      "shareTarget": 0.05,
+      "@note": "贸易执行者；GDD §4.3 表第三行 + §4.4：市场 + 与另一镇连通。道路/贸易 M5，M4 用『世界上至少 2 座城』代理连通（D-040）"
     },
     {
       "id": "class.priest",
@@ -71,7 +80,10 @@
       "status": 0,
       "taxWeight": 0.00,
       "unlockPop": 0,
-      "@note": "信仰/教化；GDD §4.3 表第四行。非物质产出（信仰）切片一 stub"
+      "unlockBuilding": "def:building.temple",
+      "unlockSurplus": 10.00,
+      "shareTarget": 0.03,
+      "@note": "信仰/教化；GDD §4.3 表第四行 + §4.4：神庙 + 剩余≥10（剩余用城内存粮代理）。信仰产出 M7"
     },
     {
       "id": "class.bureaucrat",
@@ -84,8 +96,10 @@
       "satisfaction.baseline": 55,
       "status": 0,
       "taxWeight": 0.50,
-      "unlockPop": 0,
-      "@note": "行政/AP；GDD §4.3 表第五行。AP 容量切片一 stub"
+      "unlockPop": 8,
+      "unlockBuilding": "def:building.towncenter",
+      "shareTarget": 0.04,
+      "@note": "行政/AP；GDD §4.3 表第五行 + §4.4：城镇中心 + 人口≥8。AP 容量 M9"
     },
     {
       "id": "class.scholar",
@@ -99,7 +113,9 @@
       "status": 0,
       "taxWeight": 0.50,
       "unlockPop": 0,
-      "@note": "科技/知识；GDD §4.3 表第六行。非物质产出（知识）切片一 stub"
+      "unlockBuilding": "def:building.academy",
+      "shareTarget": 0.03,
+      "@note": "科技/知识；GDD §4.3 表第六行 + §4.4：学宫 + 文字。「文字」属 M6 科技卡，M4 先只判学宫（D-040）"
     },
     {
       "id": "class.soldier",
@@ -114,7 +130,10 @@
       "status": 0,
       "taxWeight": 0.00,
       "unlockPop": 0,
-      "@note": "军事/战力；GDD §4.3 表第七行。军饷 = silver 消耗，战力产出切片一 stub"
+      "unlockBuilding": "def:building.barracks",
+      "unlockResource": "iron,horse",
+      "shareTarget": 0.04,
+      "@note": "军事/战力；GDD §4.3 表第七行 + §4.4：兵营 + 铁或马。战力产出 M7"
     },
     {
       "id": "class.artist",
@@ -127,8 +146,10 @@
       "satisfaction.baseline": 60,
       "status": 0,
       "taxWeight": 0.50,
-      "unlockPop": 0,
-      "@note": "文化/艺术；GDD §4.3 表第八行。非物质产出（文化）切片一 stub"
+      "unlockPop": 20,
+      "unlockSurplus": 30.00,
+      "shareTarget": 0.02,
+      "@note": "文化/艺术；GDD §4.3 表第八行 + §4.4：规模≥20 + 剩余≥30。规模用人口百人单位代理（D-040）；文化产出 M8"
     }
   ]
 }

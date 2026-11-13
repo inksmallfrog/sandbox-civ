@@ -77,12 +77,18 @@
         "title": "str",
         "labor": "fix",
         "unlockPop": "int",
+        "unlockTowns": "int",
+        "unlockBuilding": "str",
+        "unlockResource": "str",
+        "unlockSurplus": "fix",
+        "shareTarget": "fix",
         "satisfaction.expects": "fix",
         "satisfaction.baseline": "int",
         "status": "int",
         "taxWeight": "fix",
         "note": "str"
-      }
+      },
+      "refs": { "unlockBuilding": "building" }
     },
     "good": {
       "idPrefix": "good.",
@@ -108,6 +114,7 @@
         "upgradeCost.food": "fix",
         "maxLevel": "int",
         "facility": "fix",
+        "alphaBonus": "fix",
         "tech": "fix",
         "stockCap": "fix",
         "spoilageCut": "fix",

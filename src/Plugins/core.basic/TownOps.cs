@@ -232,6 +232,100 @@ public static class TownOps
         }
     }
 
+    /// <summary>
+    /// 第 2 步末「解锁闸门」（GDD §4.3/§4.4）：建筑、人口、资源、剩余与器需求都满足时，
+    /// 把 <c>town.unlocked.&lt;阶级&gt;</c> 置真。一次打开就粘住（建筑只会盖不会拆，门槛数据只增不减）。
+    ///
+    /// 条件全部写在 <c>data/core.basic/class.json</c>：
+    /// <c>unlockPop</c>（城镇总人口，百人单位）、<c>unlockBuilding</c>（def 引用）、
+    /// <c>unlockTowns</c>（世界上至少几座城，商人「与另一镇连通」的 M4 占位）、
+    /// <c>unlockResource</c>（辖地里出现其中任一种资源，逗号分隔）、
+    /// <c>unlockSurplus</c>（城内存粮，「剩余」的 M4 代理）、
+    /// <c>unlockDemand.&lt;商品&gt;</c>（全场该商品需求 ≥ 值）。
+    /// </summary>
+    public static void Unlocks(HookArgs args, IStepContext ctx)
+    {
+        if (!SimOrder.At(args, "buildings", SimOrder.SlotPost)) return;
+
+        long townCount = ctx.EntitiesOfKind(F.KindTown).Count;
+        foreach (var town in ctx.EntitiesOfKind(F.KindTown))
+        {
+            long totalPop = TotalPop(ctx, town.Id);
+            Fix food = ctx.GetFix(town.Id, F.TownStock("good.food"), Fix.Zero);
+
+            foreach (var cls in ctx.Data.OfType(F.TypeClass))
+            {
+                string path = F.TownUnlocked(cls.Id);
+                if (ctx.Get(town.Id, path).AsBool()) continue;      // 已解锁，粘住
+
+                string why = MissingReason(ctx, town.Id, cls, totalPop, food, townCount);
+                if (why.Length > 0) continue;
+
+                ctx.Mutate(town.Id, path, SimValue.True,
+                    $"§4.4 解锁：{cls.GetStr("title")} 的建筑/人口/资源门槛全部满足");
+                ctx.Note($"{ctx.GetStr(town.Id, F.TownName)}：{cls.GetStr("title")}解锁（§4.4）");
+            }
+        }
+    }
+
+    /// <summary>返回空串 = 门槛全过；否则一句人话说明还差什么。</summary>
+    private static string MissingReason(IStepContext ctx, EntityId town, DataEntry cls,
+        long totalPop, Fix food, long townCount)
+    {
+        long needPop = cls.GetInt("unlockPop", 0);
+        if (totalPop < needPop)
+            return $"人口 {totalPop} 不到 {needPop}";
+
+        string needBuilding = cls.GetStr("unlockBuilding", "");
+        if (!F.IsBlank(needBuilding))
+        {
+            string bId = F.BareId(needBuilding);
+            if (ctx.GetInt(town, F.TownBuilding(bId)) <= 0)
+            {
+                string title = ctx.Data.TryGet(bId, out var b) ? b.GetStr("title") : bId;
+                return $"缺{title}";
+            }
+        }
+
+        long needTowns = cls.GetInt("unlockTowns", 0);
+        if (townCount < needTowns) return $"只有 {townCount} 座城，要 {needTowns} 座";
+
+        Fix needSurplus = cls.GetFix("unlockSurplus", Fix.Zero);
+        if (food < needSurplus) return $"存粮 {food.Text} 不到 {needSurplus.Text}";
+
+        string needResource = cls.GetStr("unlockResource", "");
+        if (!F.IsBlank(needResource))
+        {
+            var wanted = needResource.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            bool found = false;
+            foreach (var tile in TilesOf(ctx, town))
+            {
+                string have = ctx.GetStr(tile, F.HexResource);
+                if (F.IsBlank(have)) continue;
+                foreach (var w in wanted)
+                {
+                    if (string.Equals(have, "resource." + w.Trim(), StringComparison.Ordinal)) { found = true; break; }
+                }
+                if (found) break;
+            }
+            if (!found) return $"辖地没有{needResource}";
+        }
+
+        foreach (var kv in cls.Scalars)
+        {
+            if (!kv.Key.StartsWith("unlockDemand.", StringComparison.Ordinal)) continue;
+            string goodShort = kv.Key["unlockDemand.".Length..];
+            Fix at = kv.Value.AsFix();
+            Fix demand = Fix.Zero;
+            foreach (var other in ctx.Data.OfType(F.TypeClass))
+                demand += Fix.Mul(other.GetFix("consumes." + goodShort, Fix.Zero),
+                    ctx.GetInt(town, F.TownPop(other.Id)));
+            if (demand < at) return $"{goodShort} 需求 {demand.Text} 不到 {at.Text}";
+        }
+
+        return "";
+    }
+
     // ---- 工具 ----
 
     /// <summary>某 kind 的第一个实体 id（<c>auto</c> 参数的落点）。EntitiesOfKind 已按 id 升序，所以结果确定。</summary>

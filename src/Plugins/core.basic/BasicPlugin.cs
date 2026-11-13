@@ -63,6 +63,8 @@ public sealed class BasicPlugin : IPlugin
         // 第 2 步末：把建筑等级折成 Facility / 仓容 / 损耗率。必须早于第 3 步，
         // 否则「今年新建的田」会凭空多出今年的粮（§2.3 之所以把顺序写死）。
         api.Require(HookPoint.OnProduction, 90, TownOps.Facilities);
+        // 第 2 步末：解锁闸门（§4.4）。必须排在设施折算之后——市场/作坊的等级是它的输入。
+        api.Require(HookPoint.OnProduction, 95, TownOps.Unlocks);
 
         // 第 3 步首：农业产出（公式一）。
         api.Require(HookPoint.OnProduction, 100, FanOut(HookPoint.OnProduction, F.KindTown, "agriculture", SimOrder.SlotPre));
@@ -155,9 +157,20 @@ public sealed class BasicPlugin : IPlugin
                     bad.Add($"{name}：{path} = {s.Text} 越出 [0, 100]（§4.2 公式三 clamp 后不可能越界）");
             }
 
+            // M4 切片二：状态与反抗计数只能落在 §4.2 的五档与非负年数上
+            foreach (var cls in ctx.Data.OfType(F.TypeClass))
+            {
+                long riot = ctx.GetInt(town.Id, F.TownRiotOf(cls.Id));
+                if (riot < 0)
+                    bad.Add($"{name}：{cls.GetStr("title")}连续反抗年数 = {riot} 为负（§4.2）");
+
+                string status = ctx.GetStr(town.Id, F.TownStatus(cls.Id));
+                if (status.Length > 0 && status is not ("服从" or "抱怨" or "怠工" or "罢工" or "暴动"))
+                    bad.Add($"{name}：{cls.GetStr("title")}状态 '{status}' 不在 §4.2 的五档里");
+            }
+
             EntityId site = F.IdOf(ctx.GetStr(town.Id, F.TownSite));
-            if (site.IsEmpty || !ctx.Has(site))
-                bad.Add($"{name}：城址 {site} 不存在，辖地与间距判定都会失效");
+            if (site.IsEmpty || !ctx.Has(site))                bad.Add($"{name}：城址 {site} 不存在，辖地与间距判定都会失效");
             else if (F.IdOf(ctx.GetStr(site, F.HexTown)) != town.Id)
                 bad.Add($"{name}：城址 {site} 的 hex.town 没有指回本城（§10.7 的双向引用必须一致）");
         }

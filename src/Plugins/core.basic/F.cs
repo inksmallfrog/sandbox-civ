@@ -63,7 +63,8 @@ public static class F
     public const string TownSite = "town.site";                  // str: 城址地块 id。辖地半径、间距、寻路都从它算，不必回扫全图
     public const string TownTiles = "town.tiles";                // int: 辖地格数（派生量，缓存给 UI 直读）
     public const string TownFacility = "town.facility";          // fix: Facility_c，第 2 步算好给第 3 步读
-    public const string TownRiot = "town.riot";                  // int: 连续 S<30 的年数（§4.2 的升级闸门）
+    public const string TownRiot = "town.riot";                  // int: 本城最长连续 S<30 年数（§4.2；聚合值，年报/旧读者用）
+    public const string TownCountdown = "town.countdown";        // int: 暴动控制权倒计时，3 年归零则脱离原属国（§4.2）
 
     public static string TownPop(string classDefId) => "town.pop." + Bare(classDefId);
     public static string TownSat(string classDefId) => "town.sat." + Bare(classDefId);
@@ -71,6 +72,9 @@ public static class F
     public static string TownGrowth(string classDefId) => "town.growth." + Bare(classDefId);
     public static string TownStatus(string classDefId) => "town.status." + Bare(classDefId);
     public static string TownStatusPrev(string classDefId) => "town.statusPrev." + Bare(classDefId);
+    public static string TownRiotOf(string classDefId) => "town.riot." + Bare(classDefId);       // int: 该阶级连续 S<30 年数
+    public static string TownUnlocked(string classDefId) => "town.unlocked." + Bare(classDefId); // bool: 解锁闸门是否已打开（§4.4）
+    public static string TownConvert(string classDefId) => "town.convert." + Bare(classDefId);   // fix: 阶级转化的零头桶（§4.7）
     public static string TownWealth(string classDefId) => "town.wealth." + Bare(classDefId);
     public static string TownBuilding(string buildingDefId) => "town.building." + Bare(buildingDefId);
     public static string TownStock(string goodDefId) => "town.stock." + Bare(goodDefId);

@@ -19,11 +19,12 @@
 
 ## 2. 当前阶段
 
-**M1 Core、M2 地图、M3 公式二与守恒、M4 切片一（八阶级循环 + 状态机五档 + 多商品价格）均已完成并当场复验；M0 的 CI 工作流已补，只差首次远端双系统全绿。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
+**M1 Core、M2 地图、M3 公式二与守恒、M4 切片一/切片二（八阶级循环 + 状态机五档与罚则 + 多商品价格 + 解锁链 + 阶级转化 + 原料约束 + 200 年基线脱离死亡螺旋）均已完成并当场复验；M0 的 CI 工作流已补，只差首次远端双系统全绿。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
 
 - 能跑的东西：无头模拟器 `sim`（6 个动词 + `--layer` 五图层）、Godot 窗口壳（32×20 地图 + 点格建城 + 5 个图层 + headless 冒烟）。
   M2 的五层地块模型已落四层：地表、水体/河网、形胜（§3.4 十二种）、资源（§3.5 五种）；人造层随 M5 的建设与道路进。
-- 还不能跑的东西：AP、名人、军事、外交、事件、联机传输；原料约束（`outputCost.*`）与解锁闸门（`unlockPop > 0`）推 M4 切片二；
+- 还不能跑的东西：AP、名人、军事、外交、事件、联机传输；税制（罢工「税收 −50%」目前只有产出罚则）、
+  多商品建筑造价（§4.8 的料/器/银，M4 按银 ÷ 10 折粮）与「阶级吸引力」真式（M5）仍在欠账；
   价格已接（公式二，4 种商品）但不影响消费分配（等 M5 多镇贸易）；资源的军事/贸易门槛（铁/马/盐/香料）分别在 M7/M5/M3 兑现。
 - 演示版本：`dotnet run --project src/HexaCiv.Cli -- run --seed 7 --turns 12 --steps --explain`。
 
@@ -52,7 +53,7 @@ src/Plugins/core.basic/ 参考规则包：10 个 .cs + manifest.json（M1–M4 �
 src/HexaCiv.Cli/       无头壳层（sim：Program / Runner / Script / AsciiMap）
 src/GodotShell/        窗口壳层（Main.cs / HexView.cs / Main.tscn / project.godot）
 data/                  _schema.json + core.basic/*.json（数值只住在这里）
-tests/SimCore.Tests/   xUnit，95 条
+tests/SimCore.Tests/   xUnit，97 条
 scripts/               demo.txt（命令脚本）、godot-smoke.txt（跨宿主对账脚本）
 analysis/out/          基线 CSV（gitignore，**是产物不是现状**）
 saves/                 回归样本档（.bin 被 ignore，只留 .gitkeep）
@@ -102,7 +103,7 @@ build/plugins/         core.basic.dll 的落点，宿主从这里装（gitignore
 
 ```bash
 dotnet build -v q --nologo                  # 必须 0 错误（警告 = 错误）
-dotnet test --nologo                        # 95 绿，0 跳过
+dotnet test --nologo                        # 97 绿，0 跳过
 dotnet run --project src/HexaCiv.Cli -- check                      # 数据包 + 清单 + 15 步 + 21 落点全表
 dotnet run --project src/HexaCiv.Cli -- hash  --seed 99 --turns 50  # 确定性自检
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5 --turns 20 --at 12
@@ -114,10 +115,10 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 
 | 命令 | 期望 |
 |---|---|
-| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `2e9b047076e49543`，**且必须与 Godot 冒烟同值** |
+| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `fc88ca36ce90fb37`，**且必须与 Godot 冒烟同值** |
 | `… replay --seed 5 --turns 20 --at 12` | 快照往返 `e9962eacb7b9402b`；续跑 = 一口气跑满 `1bf10ff00577dfca` |
-| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 6 / hash `880d3f17bc5c47aa`（M3/M4 的状态机在 S≈29 的怠工线附近进入死亡螺旋，两边分支都如此，见 §10 第 4 条） |
-| `… check` | `dataHash 1c451f9a3d142d7e`，15 步、21 落点（**7 个不落在任何步骤**） |
+| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 117 / hash `c627c4d01388e426`（M4 切片二接上 §4.7 的拥挤项后不再死亡螺旋，见 §10 第 6 条） |
+| `… check` | `dataHash 495c26d59b6e2362`，15 步、21 落点（**7 个不落在任何步骤**） |
 
 `dotnet test` 不覆盖跨宿主一致性：改过 `src/GodotShell/Main.cs` 的 `Smoke()` 参数，
 **必须同步改 `scripts/godot-smoke.txt`** 并跑上面两条对比（`TEST_PLAN.md` §3）。
@@ -152,9 +153,9 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 | 层 | 内容 | 证据 |
 |---|---|---|
 | SimCore | 九项职责全部实现（世界存储 / 15 步调度 / 分层 RNG / 数据注册 / 不变量 / 因果链 / 命令流 / 存档回放迁移 / 插件宿主）+ 同步层与分块哈希铺好接缝 | `AI_HANDOFF.md` §2.1、`ROADMAP.md` §2.2 |
-| core.basic | 32×20 矩形六边形图（§3.7 六步：高度/温度/降水/九类地表 + §3.1 水体 + §3.3 河网 + §3.4 十二形胜 + §3.5 五种门槛资源 + 骨架雕刻）+ 建国 → 建城 → 开荒/起仓 → **八阶级产出循环（公式一，含状态机罚则）** → **多商品价格（公式二，除 silver 外 4 种）** → 消耗 → 配给 → 满意度（公式三 + **状态机五档**）→ 人口 → 不安计数 → 年报；**三条公式已全部实装**；守恒等式（§5.9 第一条，循环所有商品）与价格区间不变量已注册 | `BALANCE.md` §1/§3/§4/§5 |
+| core.basic | 32×20 矩形六边形图（§3.7 六步：高度/温度/降水/九类地表 + §3.1 水体 + §3.3 河网 + §3.4 十二形胜 + §3.5 五种门槛资源 + 骨架雕刻）+ 建国 → 建城 → 开荒/起仓 → **八阶级产出循环（公式一，含 §4.2 罚则与 §4.3 原料约束）** → **多商品价格（公式二，除 silver 外 4 种）** → 消耗 → 配给 → 满意度（公式三 + **状态机五档 + 分阶级反抗 + 暴动倒计时**）→ 人口增长（含 §4.7 拥挤）→ **解锁闸门（§4.4）与阶级转化（§4.7）** → 不安计数 → 年报；**三条公式已全部实装**；守恒等式（§5.9 第一条，循环所有商品）与价格区间不变量已注册 | `BALANCE.md` §1/§3/§4/§5 |
 | 壳层 | CLI 6 动词 + `--layer` 五图层；Godot 窗口（绘制 / 拾取 / 侧栏 / 年报 / 640 格全格拾取自检；河网、水体、形胜标记、资源与人口图层） | `ROADMAP.md` §2 |
-| 测试 | 95 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 33 / 形胜与资源 16 / 验收 14 | `TEST_PLAN.md` §2 |
+| 测试 | 97 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 35 / 形胜与资源 16 / 验收 14（含 M4 切片二新增 2 条） | `TEST_PLAN.md` §2 |
 | 文档 | §11.1 要求的 13 份全部落地（GDD 之外 12 份 + REQUIREMENTS）+ 本文件 | `ROADMAP.md` §2.1 |
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
@@ -164,18 +165,20 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 2. **两条接缝是「解析了但没人用」**：`SimConfig.YearLimit`（120/200 年不会自动结束）、
    `manifest.data_packs`（卡包开关还不生效）。**别误判成已生效**——前者归 M9，后者归 M8。
 3. **守恒等式**（§5.9 前三条）：**第一条已实现**（物资守恒 `basic.conservation`，第 10 步末校验，循环除 silver 外所有商品）；
-   银守恒（进出口/税）与人口守恒（迁移/阶级转化）归 M4 切片二 / M5。
+   银守恒（进出口/税）与人口守恒（迁移/阶级转化）归 M5——§4.7 的转化已接，但「Σ 阶级人口 = 城镇总人口」尚未注册成不变量。
 4. **价格求解器已覆盖 4 种商品**（food/mat/goods/lux）；`κ`（金本位调整）固定为 1.0，等 M_global/M_ref 接了才生效（M9）。
 5. **建图计时已经有了**：`sim map` 会打印插件的建图耗时（32×20 实测约 74 ms，判据 < 1 s）。
    §3.4 十二形胜、§3.5 五种门槛资源与 §3.9 的 5 个图层已在切片四落地；`CoreInfo.MapGenVersion=6`。
-6. **200 年基线会死亡螺旋**：M3/M4 的状态机在 S≈29（粮安 0.5 的平衡点）跨过怠工线，产出折半后人口坍缩到个位数。
-   这不是合并引入的——`origin/master` 自己的 200 年 CSV 也是 `pop=7`。归 M4 切片二的标定/罚则回退，别把它当基线正确性。
+6. **200 年死亡螺旋已在 M4 切片二修掉，但平衡点是「有界的坏均衡」**：接上 §4.7 的拥挤项
+   （住房容量 = 辖地自然粮潜力 ÷ 人均口粮，占位见 D-041）与 §4.2 的原值罚则后，
+   seed 42 的 200 年基线稳定在 2 城 / 人口 ≈117 / 最低满意 30–42，不再坍缩到个位数。
+   最低满意仍会在 26–30 附近波动（卖人地矛盾的平衡点），别把它误读成新的死亡螺旋。
 7. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
    本仓库已经有一次结论被旧 CSV 带偏。
 8. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
 9. **分支仍叫 `master`，CI 尚待远端首验**：当前已有 `origin` remote，但双系统工作流实际全绿前，任何「CI 绿」的主张都没有证据基础。
 10. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 用整数定点与整数平方根，地图形状为 32×20 矩形，
-   `CoreInfo.MapGenVersion=6`（河网/水体/形胜/资源）；宿主 #1 上 CLI 与 Godot 4.7.2 smoke 同为 `2e9b047076e49543`，
+   `CoreInfo.MapGenVersion=6`（河网/水体/形胜/资源）；宿主 #1 上 CLI 与 Godot 4.7.2 smoke 同为 `fc88ca36ce90fb37`，
    CI 首验要在 ubuntu + windows 上复核同种子地图哈希。
 
 ## 11. 下一项任务（按顺序，不跳队）
@@ -184,12 +187,12 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
    把首个 Linux 哈希写回 `BALANCE.md` / `CHANGELOG-DESIGN.md`；本地等价复验不能替代这一步。
 2. **重写根 [`Readme.md`](Readme.md)**：人类入口，一条命令 + 一张截图 + 指回本文件（需求原文已在 `REQUIREMENTS.md`）。
 3. **打 tag `v0.0` / `v0.1`，并把 `master` → `main`**（D-002 的三步；`develop` / `feature/*` 有理由地推迟）。
-4. **M2 已经收口，M3/M4 切片一也已并入**：形状、九类地表、河网水体、十二形胜、五种门槛资源与图层 4–5 全部落地，
-   证据在 [`docs/ROADMAP.md`](docs/ROADMAP.md) §2.3；三条公式与守恒第一条已实装。
+4. **M2 已经收口，M3/M4 切片一/二也已并入**：形状、九类地表、河网水体、十二形胜、五种门槛资源与图层 4–5 全部落地，
+   证据在 [`docs/ROADMAP.md`](docs/ROADMAP.md) §2.3；三条公式、守恒第一条、解锁链与阶级转化已实装。
    **M2 验收的人工目检条**（同形胜在 20 张图里可认出）见 `analysis/out/m2-shapes.txt`。
-5. **下一步是 M4 切片二**：原料约束（`outputCost.*`）、解锁闸门（`unlockPop > 0`）、per-class riot 计数、
-   阶级转化与人口增长、非第一产业 hard cap、税制与 AP 容量；同时要处理 §10 第 6 条的 200 年死亡螺旋（属于同一片的标定工作）。
-   M4 切片一（八阶级数据 + 三条公式循环 + 状态机五档 + 多商品价格 + class_monotonic 不变量）已完成（`f0521a9`）。
+5. **下一步是 M4 收尾与 M5**：税制（罢工的抗税 −50% 只有产出罚则）、AP 容量、多商品建筑造价、
+   「阶级吸引力」真式（D-041）、人口守恒不变量；随后进 M5 的多镇贸易（价格随贸易联动）。
+   M4 切片一 `f0521a9`、切片二见 CHANGELOG-DESIGN **D-040**。
 
 ## 12. 不可违反的架构原则
 

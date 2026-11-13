@@ -30,6 +30,15 @@ public static class Pricing
     /// </summary>
     public static void Price(EntityId town, HookArgs args, IStepContext ctx)
     {
+        // α = 0.30 + Σ(市场等建筑的 alphaBonus × 等级)（§4.8：市场每级本地价格弹性 +0.05）
+        Fix alpha = Alpha;
+        foreach (var def in ctx.Data.OfType(F.TypeBuilding))
+        {
+            Fix bonus = def.GetFix("alphaBonus", Fix.Zero);
+            if (bonus.IsZero) continue;
+            alpha += Fix.Mul(bonus, ctx.GetInt(town, F.TownBuilding(def.Id)));
+        }
+
         foreach (var good in ctx.Data.OfType(F.TypeGood))
         {
             // silver = 货币单位，不参与价格求解（§5.1 脚注）
@@ -77,7 +86,7 @@ public static class Pricing
             Fix shock = stream.NextGaussian(Fix.Zero, Fix.FromPercent(4));
 
             // ---- change = 1 + α × gap + shock ----
-            Fix change = Fix.One + Fix.Mul(Alpha, gap) + shock;
+            Fix change = Fix.One + Fix.Mul(alpha, gap) + shock;
 
             // ---- p_new = p_prev × change，然后 clamp [priceFloor, priceCeil] ----
             Fix p_new = Fix.Mul(p_prev, change).Clamp(priceFloor, priceCeil);
@@ -90,14 +99,14 @@ public static class Pricing
             string hint = D > S && p_new > p_prev ? "↑" : D < S && p_new < p_prev ? "↓" : "↔";
 
             ctx.Explain(town, $"{title}价（§5.3 公式二）",
-                "p_{t+1} = clamp( p_t × (1 + 0.30 × (D − S) / max(S, 0.5) + shock) , 0.2×p0, 5×p0 )",
+                "p_{t+1} = clamp( p_t × (1 + α × (D − S) / max(S, 0.5) + shock) , 0.2×p0, 5×p0 )",
                 [$"p_t（上期价格）= {p_prev.Text}",
                  $"D（本期需求）= {D.Text}（{direction}）",
                  $"S（本期可售）= {S.Text}（含本期产出 {output.Text}）",
                  $"(D − S) = {(D - S).Text}，max(S, 0.5) = {denom.Text} ⇒ gap = {gap.Text}",
-                 $"α × gap = {Fix.Mul(Alpha, gap).Text}",
+                 $"α × gap = {Fix.Mul(alpha, gap).Text}（α = {alpha.Text}，含市场加成）",
                  $"shock ~ N(0, 0.04) = {shock.Text}",
-                 $"⇒ change = 1 + 0.30 × gap + shock = {change.Text}",
+                 $"⇒ change = 1 + α × gap + shock = {change.Text}",
                  $"clamp [{priceFloor.Text}, {priceCeil.Text}]（0.2×p0 ~ 5×p0）"],
                 $"p_{{t+1}} = {p_prev.Text} × {change.Text} = {p_new.Text}，clamp 后仍在 [{priceFloor.Text}, {priceCeil.Text}] 内 {hint}");
         }
