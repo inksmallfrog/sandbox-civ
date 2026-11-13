@@ -1,0 +1,125 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  GODOT_VERSION: 4.7.2
+  EXPECTED_SMOKE_HASH: 1cd6f74b25e33aa3
+
+jobs:
+  build-test:
+    name: 构建与单测（${{ matrix.os }}）
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: 构建解决方案
+        run: dotnet build -v q --nologo
+      - name: 运行全部测试
+        run: dotnet test --no-build --nologo
+
+  sim-headless:
+    name: 无头模拟（${{ matrix.os }}）
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: 构建解决方案与插件
+        run: dotnet build -v q --nologo
+      - name: 校验数据包、清单与结算表
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- check
+      - name: 确定性自检
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 99 --turns 50
+      - name: 存档回放等价自检
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12
+      - name: 生成二百年基线报告
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- run --seed 42 --turns 200 --headless --out analysis/out/demo.csv
+      - name: 上传基线报告
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-baseline-${{ matrix.os }}
+          path: analysis/out/demo.csv
+          if-no-files-found: error
+
+  godot-smoke:
+    name: Godot 跨宿主冒烟（${{ matrix.os }}）
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: 安装 Godot .NET ${{ env.GODOT_VERSION }}
+        shell: pwsh
+        run: |
+          $version = $env:GODOT_VERSION
+          if ($IsWindows) {
+            $asset = "Godot_v${version}-stable_mono_win64.zip"
+            $executable = "Godot_v${version}-stable_mono_win64.exe"
+          } else {
+            $asset = "Godot_v${version}-stable_mono_linux_x86_64.zip"
+            $executable = "Godot_v${version}-stable_mono_linux.x86_64"
+          }
+
+          $archive = Join-Path $env:RUNNER_TEMP $asset
+          $destination = Join-Path $env:RUNNER_TEMP "godot"
+          Invoke-WebRequest `
+            -Uri "https://github.com/godotengine/godot-builds/releases/download/${version}-stable/${asset}" `
+            -OutFile $archive
+          Expand-Archive -Path $archive -DestinationPath $destination -Force
+
+          $binary = Get-ChildItem -Path $destination -Recurse -File -Filter $executable | Select-Object -First 1
+          if ($null -eq $binary) { throw "Godot 压缩包中找不到 $executable" }
+          if (-not $IsWindows) { chmod +x $binary.FullName }
+          & $binary.FullName --version
+          if ($LASTEXITCODE -ne 0) { throw "Godot 无法启动，退出码 $LASTEXITCODE" }
+
+          $binaryPath = $binary.FullName.Replace('\', '/')
+          "GODOT_BIN=$binaryPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: 构建解决方案与插件
+        run: dotnet build -v q --nologo
+      - name: 单独构建 GodotShell
+        run: dotnet build src/GodotShell/HexaCiv.GodotShell.csproj -v q --nologo
+      - name: CLI 对账
+        shell: bash
+        run: |
+          mkdir -p analysis/out
+          dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt 2>&1 | tee analysis/out/cli-smoke.log
+          grep -F "末态 ${EXPECTED_SMOKE_HASH}" analysis/out/cli-smoke.log
+      - name: Godot 冒烟与哈希对账
+        shell: bash
+        run: |
+          "$GODOT_BIN" --headless --path src/GodotShell -- --smoke 2>&1 | tee analysis/out/godot-smoke.log
+          grep -F "SMOKE PASS" analysis/out/godot-smoke.log
+          grep -F "smoke 第 6 回合 hash=${EXPECTED_SMOKE_HASH}" analysis/out/godot-smoke.log
+      - name: 上传跨宿主对账日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-smoke-${{ matrix.os }}
+          path: analysis/out/*-smoke.log
+          if-no-files-found: warn

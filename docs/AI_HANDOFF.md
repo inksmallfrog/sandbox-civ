@@ -10,7 +10,7 @@
 
 ## 0. 一分钟版
 
-- **M1 Core 已经立住，M0 只差 CI**。60 条测试绿，三个基线哈希当场复验过（§1 表格）。
+- **M1 Core 已经立住，M0 只差 CI 首次远端双系统全绿**。三 job × ubuntu/windows 的工作流已补；60 条测试与 Windows 宿主 #2 的基线当场复验过（§1 表格）。
 - **接手第一件事不是写代码，是跑 §6 那五条命令**。有对不上的，先修环境再动代码——
   这个仓库的正确性主张全靠「同种子同命令流 → 同哈希」撑着，跑不出来时任何改动都无法判断好坏。
 - **读的顺序（§11.4 原文）**：本文件 → `AGENTS.md` → GDD §10 + 附录 A → 要动的子系统章节。
@@ -25,13 +25,15 @@
 > 新宿主复核（2026-11-13）：.NET SDK 8.0.428 位于 `C:\Program Files\dotnet\dotnet.exe`；本次通过完整路径运行。
 > `.slnx` 在该 SDK 不受支持，已换成 `HexaCiv.sln`。根解决方案 build 0 警告/错误、60 测试全绿；CLI `check` / hash / replay、
 > 空世界 1000 回合、200 年基线与 Godot .NET 4.7.2 smoke 均通过。地图噪声已改为整数定点，MapGenVersion=2。
-> 新基线见下表。只在 Windows 同机做过 CLI ↔ Godot 对账，跨 OS 仍未验证；CI 仍缺失。
+> 新基线见下表。`.github/workflows/ci.yml` 已补齐三 job × ubuntu/windows，下载地址与 YAML 结构已检查，Windows 宿主 #2 已按同步骤复验；
+> 但远端首跑尚未执行，跨 OS 仍未验证，M0 保持 🟡。
 
 | 项 | 值 | 复现 |
 |---|---|---|
-| 分支 | `master` 跟踪 `origin/master`；本轮复核提交保留在本地，未推送 | `git branch -vv` / `git log -1 --oneline` |
-| 工作区 | 本轮复核提交后应为 clean | `git status --short` |
+| 分支 | `master` 跟踪 `origin/master`；本轮复核与 CI 提交保留在本地，未推送 | `git branch -vv` / `git log -1 --oneline` |
+| 工作区 | 仍有交接前留下的 README / 宿主文档改动，本轮不接管；以 status 为准 | `git status --short` |
 | 测试 | **60 绿，0 跳过** | `dotnet test --nologo` |
+| 确定性自检 | `e6c324ac3bcfbe3b`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
 | 跨宿主末回合哈希 | `1cd6f74b25e33aa3`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值 |
 | 快照往返 | `9b82e9599ae198cd`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
 | 续跑等价 | `482c8643eada3e64`（一口气跑满 = 存盘续跑） | 同上 |
@@ -87,7 +89,8 @@
 |---|---|---|
 | `8039610` | 低粮安不再把人口冻死在定点刻度上 + 回归测试 | D-020（附模拟差异表） |
 | `88b5859` | 修一批指错章节的 GDD 引用 + 补 BALANCE / ROADMAP | D-030 |
-| 未提交 | TEST_PLAN / CHANGELOG-DESIGN / AI_HANDOFF / AGENTS | — |
+| `1fe9876` | .NET 8 solution + 地图整数定点与存档版本回归 | D-031 / D-032 |
+| 本轮 CI | 三 job × ubuntu/windows 工作流 + Windows #2 等价复验 + 更正 seed 99 文档基线 | D-032（补漏记基线）；CI 本身数值零变化 |
 
 D-020 是这次会话里唯一的**行为变更**：`SeasonRules.Demography` 里 `0.04 × 粮安` 只有 0.00xx 量级，
 在 ×100 定点下 `粮安 ≤ 0.62` 时被截成 0，乘回人口还是 0，于是人口永久卡在地块上限。
@@ -100,7 +103,7 @@ D-020 是这次会话里唯一的**行为变更**：`SeasonRules.Demography` 里
 
 | # | 事 | 判据 | 记录在哪 |
 |---|---|---|---|
-| 1 | **CI 工作流**（M0 三条验收里唯一没兑现的） | 三个 job 在 ubuntu + windows 上都绿；M0 才打 `v0.0` | `TEST_PLAN.md` §6 |
+| 1 | **CI 首验**（工作流已补，M0 只剩实际运行证据） | 推送后三个 job 在 ubuntu + windows 上都绿；把首个 Linux 哈希写回文档；M0 才打 `v0.0` | `TEST_PLAN.md` §6 |
 | 2 | 根 `Readme.md` 重写（需求原文已在 `docs/REQUIREMENTS.md`） | 玩家视角：一条命令跑起来 + 一张截图 + 指回 `AGENTS.md` | `CHANGELOG-DESIGN.md` D-004 |
 | 3 | tag `v0.0`（M0）/ `v0.1`（M1）+ `master` → `main` 改名 | §11.2 的 tag 表；`v0.2` 的语义冲突挂在 D-001 | `CHANGELOG-DESIGN.md` §1 |
 | 4 | **M2 地图**：32×20 矩形、河网 / 形胜 / 门槛资源、bootstrap 计时 | §3.7 六步全跑 + 三条验收各给得出证据 | `ROADMAP.md` §3 |
@@ -215,4 +218,4 @@ dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --
 
 `sim check` 顺手跑一下：它同时校验数据包、清单、15 步表与 21 个落点表，是「文档与实现有没有分叉」的最快探针。
 
-§11.4 收工三件事：更新本文件 → 提交 → 打 tag（`v0.0` 的门槛是 §1 表格的 CI 那行补上）。
+§11.4 收工三件事：更新本文件 → 提交 → 打 tag（`v0.0` 的门槛是 CI 三 job 在远端 ubuntu + windows 实际全绿，不是工作流文件已经存在）。

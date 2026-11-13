@@ -116,7 +116,8 @@ Godot .NET 4.7.2 --headless --path src/GodotShell -- --smoke        # Windows �
 `Smoke()` 提交的命令**逐字相同**，改一边就要改另一边，否则这条比对立刻红）。
 Godot 侧还顺带验渲染：`smoke 拾取：183/183 命中`、字体回退、`SMOKE PASS`。
 
-**这个比对目前没有自动化**——它需要一个能跑 Godot 的 CI runner（§6）。
+这个比对已由 `.github/workflows/ci.yml` 的 `godot-smoke` job 自动化：同一 job 内先跑 CLI，再跑 Godot，
+两边都核对末态哈希，并强制 `grep` `SMOKE PASS`。配置已落地不等于远端已验收，首次双系统运行状态见 §6。
 
 ---
 
@@ -157,20 +158,21 @@ Godot 侧还顺带验渲染：`smoke 拾取：183/183 命中`、字体回退、`
 
 ---
 
-## 6. CI：M0 唯一没兑现的验收项
+## 6. CI：配置已补，待首次双系统验收
 
-`.github/` 目前是空的。§12 M0 的三条验收里「CI（单测 + headless）」因此没过，
-`docs/ROADMAP.md` §2.1 把 M0 标成 🟡 而不是 ✅。要补的工作流应当只有三个 job：
+`.github/workflows/ci.yml` 已实现下列三个 job，全部使用 **ubuntu-latest + windows-latest** 矩阵，
+`fail-fast: false`，避免一个系统先红就吞掉另一个系统的证据：
 
 | job | 步骤 | 挂了意味着 |
 |---|---|---|
-| `build-test` | `dotnet build` + `dotnet test` | 单元/契约/验收任一红。注意 `Directory.Build.props` 里 `TreatWarningsAsErrors=true`，警告也算红 |
+| `build-test` | `dotnet build` + `dotnet test --no-build` | 单元/契约/验收任一红。注意 `Directory.Build.props` 里 `TreatWarningsAsErrors=true`，警告也算红 |
 | `sim-headless` | `sim check` → `sim hash --seed 99 --turns 50` → `sim replay --seed 5 --turns 20 --at 12` → `sim run --seed 42 --turns 200 --headless --out` 并上传报告 | 确定性、回放等价、或基线报告无法生成 |
-| `godot-smoke` | `dotnet build src/GodotShell/HexaCiv.GodotShell.csproj` 后运行 `godot --headless --path src/GodotShell -- --smoke`，比对 `1cd6f74b25e33aa3` | 跨宿主分叉（§3），或渲染/拾取崩了 |
+| `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `1cd6f74b25e33aa3`，并上传对账日志 |
 
-三个 job 都该跑在 **ubuntu + windows 两个矩阵**上：§10.7 的位级确定性最怕的就是
-只在开发机上验过。CI 里第一个 Linux 绿的哈希必须当场抄进 `docs/BALANCE.md` §4 与 `CHANGELOG-DESIGN.md`，
-之后它就是基线。**在此之前，「跨平台一致」是一个尚未验证的假设，不是已完成的事实。**
+2026-11-13 在 Windows 宿主 #2 按上述步骤复验通过，两个 Godot 官方下载地址均返回 200。
+**远端首跑尚未执行，所以 M0 仍为 🟡，不能写成 CI 已绿。** CI 里第一个 Linux 绿的哈希必须当场抄进
+`docs/BALANCE.md` §4 与 `CHANGELOG-DESIGN.md`，之后它就是基线。在此之前，
+「跨平台一致」是一个尚未验证的假设，不是已完成的事实。
 
 ---
 

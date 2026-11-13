@@ -16,7 +16,7 @@
 
 ## 2. 当前阶段
 
-**M1 Core 已完成并当场复验；M0 只差 CI 工作流。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
+**M1 Core 已完成并当场复验；M0 的 CI 工作流已补，只差首次远端双系统全绿。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
 
 - 能跑的东西：无头模拟器 `sim`（6 个动词）、Godot 窗口壳（画地图 + 点格建城 + headless 冒烟）。
 - 还不能跑的东西：价格（公式二）、八阶级（只有农民）、AP、名人、军事、外交、事件、联机传输。
@@ -40,6 +40,7 @@ Readme.md              人类入口：怎么跑起来
 AGENTS.md              本文件
 Directory.Build.props  net8.0 / C#12 / Nullable / 警告即错误 / RepoRoot
 HexaCiv.sln            SimCore + core.basic + sim + tests（GodotShell 刻意不在里面）
+.github/workflows/ci.yml 三 job × ubuntu + windows；godot-smoke 强制核对 SMOKE PASS 与哈希
 docs/                  GDD.md（唯一规则来源）+ §11.1 要求的另外 12 份 + REQUIREMENTS.md
 src/SimCore/           内核：20 个 .cs，引擎无关，一条玩法规则都没有
 src/Plugins/core.basic/ 参考规则包：7 个 .cs + manifest.json（M1 的全部规则都在这一层）
@@ -149,7 +150,8 @@ dotnet run --project src/HexaCiv.Cli -- run --no-plugins --no-data --turns 1000 
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
 
-1. **CI 缺失**：没有 `.github/workflows`，M0 因此标 🟡。要补的三个 job 在 `TEST_PLAN.md` §6。
+1. **CI 尚待远端首验**：`.github/workflows/ci.yml` 已有三个 job × ubuntu + windows，但本地复验不等于 CI 绿；
+   首跑全绿前 M0 仍标 🟡，不能打 `v0.0`。命令与判据见 `TEST_PLAN.md` §6。
 2. **两条接缝是「解析了但没人用」**：`SimConfig.YearLimit`（120/200 年不会自动结束）、
    `manifest.data_packs`（卡包开关还不生效）。**别误判成已生效**——前者归 M9，后者归 M8。
 3. **守恒等式没实现**（§5.9 前三条）：M1 没有进口/出口，现在只有范围与符号不变量兜着。归 M3。
@@ -158,13 +160,13 @@ dotnet run --project src/HexaCiv.Cli -- run --no-plugins --no-data --turns 1000 
 5. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
    本仓库已经有一次结论被旧 CSV 带偏。
 6. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
-7. **分支仍叫 `master`，CI 工作流缺失**：当前已有 `origin` remote，但 CI 落地前任何「CI 绿」的主张都还没有证据基础。
-8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 已改为整数定点和整数平方根，`CoreInfo.MapGenVersion=2`，Windows CLI/Godot 对账通过；CI 落地后要在 ubuntu + windows 上复核同种子地图哈希。
+7. **分支仍叫 `master`，CI 尚待远端首验**：当前已有 `origin` remote，但双系统工作流实际全绿前，任何「CI 绿」的主张都没有证据基础。
+8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 已改为整数定点和整数平方根，`CoreInfo.MapGenVersion=2`，Windows CLI/Godot 对账通过；CI 首验要在 ubuntu + windows 上复核同种子地图哈希。
 
 ## 11. 下一项任务（按顺序，不跳队）
 
-1. **补 CI**：`.github/workflows` 三 job（`build-test` / `sim-headless` / `godot-smoke`）× ubuntu + windows。
-   命令与期望值照 `TEST_PLAN.md` §6/§3——`godot-smoke` 那个 job **必须 grep `SMOKE PASS`**（坑 12）。
+1. **完成 CI 首验**：推送后核对 `.github/workflows/ci.yml` 的三 job 在 ubuntu + windows 全部实际通过，
+   把首个 Linux 哈希写回 `BALANCE.md` / `CHANGELOG-DESIGN.md`；本地等价复验不能替代这一步。
 2. **重写根 [`Readme.md`](Readme.md)**：人类入口，一条命令 + 一张截图 + 指回本文件（需求原文已在 `REQUIREMENTS.md`）。
 3. **打 tag `v0.0` / `v0.1`，并把 `master` → `main`**（D-002 的三步；`develop` / `feature/*` 有理由地推迟）。
 4. **然后开 M2 地图**：范围与三条接口前置改动（半径制 → 32×20 矩形、`CoreInfo.MapGenVersion` +1、
