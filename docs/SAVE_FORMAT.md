@@ -36,10 +36,10 @@
   "turn": 12,
   "yearBase": 1,
   "dataHash": "af324b5a33571234",     // 数据包摘要：档与数据不同源时报警
-  "snapshotHash": "9b82e9599ae198cd", // 写档时的 StateHash.Total
+  "snapshotHash": "2b4879a4f1de53f9", // 写档时的 StateHash.Total
   "savedUtc": "…",                      // 🟡 M1 永远缺席：两个壳层都不填，Core 禁止读时钟
   "pluginVersions": { "core.basic": "0.1.0" },
-  "kindCounters":  { "hex": 61, "town": 1, "nation": 1 },   // 缺了它重开后会撞 id
+  "kindCounters":  { "hex": 640, "town": 1, "nation": 1 },  // 缺了它重开后会撞 id
   "rng": { "global": "1234…", "streams": [ { "ns": "town.0000@harvest#12", "state": "…" } ] },
   "entities": [ { "id": "hex.0000", "kind": "hex", "fields": { "hex.q": "i0", … } } ],
   "commands": [ { "turn": 3, "seq": 1, "issuer": "nation.0000", "type": "building.build",
@@ -132,9 +132,9 @@ public static class MigratorChain { Register(m); Registered; Clear();
 ## 6. 等价性自检（`sim replay`）
 
 ```
-第 12 回合快照往返　　：✓ 9b82e9599ae198cd
-一口气跑满 20 回合　　：482c8643eada3e64
-存第 12 回合后续跑 8 回合：482c8643eada3e64
+第 12 回合快照往返　　：✓ 2b4879a4f1de53f9
+一口气跑满 20 回合　　：49b257e9a5ce3fe4
+存第 12 回合后续跑 8 回合：49b257e9a5ce3fe4
 ✓ 存档续跑等价（§10.6）
 ```
 

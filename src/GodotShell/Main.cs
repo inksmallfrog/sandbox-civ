@@ -191,10 +191,16 @@ public partial class Main : Node2D
         foreach (var hex in _sim.World.OfKind("hex"))
         {
             int q = (int)hex.GetInt("hex.q"), r = (int)hex.GetInt("hex.r");
-            foreach (var off in new[] { Vector2.Zero, new Vector2(11, -9), new Vector2(-13, 7) })
+            // 偏移写在「格内局部坐标」里（按 HexSize 取比例），这样地图缩放到 32×20 后仍然落在同一格
+            foreach (var off in new[]
+                     {
+                         Vector2.Zero,
+                         new Vector2(0.24f, -0.20f) * HexView.HexSize,
+                         new Vector2(-0.28f, 0.15f) * HexView.HexSize,
+                     })
             {
                 total++;
-                if (_view.Pick(_view.ToGlobal(HexView.Pixel(q, r)) + off) != hex.Id) bad++;
+                if (_view.Pick(_view.ToGlobal(HexView.Pixel(q, r) + off)) != hex.Id) bad++;
             }
         }
         GD.Print($"smoke 拾取：{total - bad}/{total} 命中" + (bad == 0 ? "" : $"（{bad} 处偏格）"));

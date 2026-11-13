@@ -39,7 +39,15 @@ public sealed class BasicPlugin : IPlugin
     public void OnLoad(IPluginApi api)
     {
         // ---- 1. 开局初始化：只有地形，没有国家也没有城（§3.7 的第 1 步高度图在 M2 接进来）----
-        api.RegisterBootstrap(MapGen.Bootstrap);
+        // 计时写进 StartupLog：建图是 bootstrap，不在 15 步上（AI_HANDOFF 坑 7），
+        // §12 M2 的「32×20 生成 < 1 s」只能在这一层量。计时文本不进世界状态，不影响哈希。
+        api.RegisterBootstrap(ctx =>
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            MapGen.Bootstrap(ctx);
+            sw.Stop();
+            api.Log($"建图 {sw.Elapsed.TotalMilliseconds:0.0} ms（§12 M2 判据 < 1000 ms）");
+        });
 
         // ---- 2. 命令 ----
         api.RegisterCommand("nation.found", Nations.Found, "name=<国名> seed=<可省：把已有城镇收为首都>");

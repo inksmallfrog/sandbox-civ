@@ -235,7 +235,7 @@ api.RegisterInvariant("basic.ranges", new[] { 2, 3, 10, 12, 13 }, Sanity);
   代价是短名必须全局唯一，`class.peasant` 与 `good.peasant` 撞名要在数据校验那关就炸掉；
 - 建筑在城上写 `town.building.<短名>`，在地上写 `hex.building.<短名>`；
 - 数据包引用一律 `def:building.farm` 形式（`DataRegistry.DefPrefix`），`Exists/Resolve` 做校验；
-- 全局标量寄居 `world.0000`：`config.mapRadius`、`report.towns`、`meta.*`（Core 只写 `meta.*`）。
+- 全局标量寄居 `world.0000`：`config.mapColumns` / `config.mapRows`、`report.towns`、`meta.*`（Core 只写 `meta.*`）。
 
 年度报告的键是 `report.*`（`TurnReport.Headline` 的字典键**是完整路径**，UI 取时要带上前缀），
 由玩法插件写，Core 每回合开头先清掉上一年的。

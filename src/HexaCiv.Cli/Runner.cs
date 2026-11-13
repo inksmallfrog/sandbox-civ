@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using SimCore;
@@ -195,9 +196,17 @@ public static class Runner
 
     public static int PrintMap(Options o)
     {
+        // 地图生成是 bootstrap，不在 15 步上（AI_HANDOFF 坑 7），所以 §12 M2 的
+        // 「32×20 生成 < 1 s」只能在这里看：建图本体的耗时由插件写进 StartupLog，
+        // 下面再给一行「数据 + 插件 + 建图」的开局总耗时做参照。
+        var sw = Stopwatch.StartNew();
         var sim = Open(o, out var script);
+        sw.Stop();
         sim.RunTurns(0);
-        Console.WriteLine($"seed={o.Seed} 地图（§3.1 轴坐标，pointy-top）");
+        Console.WriteLine($"seed={o.Seed} 地图（§3.1 轴坐标，pointy-top；§3.9 矩形）");
+        foreach (string line in sim.StartupLog)
+            if (line.Contains("建图", StringComparison.Ordinal)) Console.WriteLine(line.Trim());
+        Console.WriteLine($"开局总耗时（数据 + 插件 + 建图）：{sw.Elapsed.TotalMilliseconds:0.0} ms");
         Console.WriteLine(AsciiMap.Render(sim));
         if (o.Turns > 0)
         {

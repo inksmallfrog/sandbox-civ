@@ -5,10 +5,13 @@ namespace CoreBasic;
 /// <summary>
 /// 地图生成（GDD §3.7 六步管线的前两步：高度图 → 地表分类，再算 §3.6 的 Y_g 粮潜力）。
 ///
-/// M1 的取舍与后续接口：
-/// - 只跑「盆地 + 外环高地」这一条最出效果的地形（§1.2 要的盆地/山谷/山水夹缝在这里已经看得出来）。
-/// - 没有河流（§3.3）、形胜（§3.4）、资源（§3.5）、图层 3–5（§3.9）——那是 M2 的活；
-///   届时 <see cref="CoreInfo.MapGenVersion"/> 必须 +1 并写进存档（§3.7 末行、§10.6）。
+/// M2 切片一的取舍与后续接口：
+/// - 地图形状已是 §3.9 / §13.1 的 <b>32 × 20 矩形</b>：按 odd-r 偏移坐标铺格，存的是轴坐标，
+///   于是屏幕上是矩形、<see cref="Distance(int,int)"/> 仍是标准轴距（§3.1）。
+/// - 只跑「边缘高地 + 中央低地」这一条最出效果的地形；河流（§3.3）、形胜（§3.4）、
+///   资源（§3.5）、图层 4–5（§3.9）仍是后续切片。
+/// - 形状改了就必须递增 <see cref="CoreInfo.MapGenVersion"/> 并写进存档（§3.7 末行、§10.6）；
+///   旧种子会长出新地图，这是明写要求，不是回归。
 /// - 噪声只用整数定点与整数平方根，不经过 float/double：地图字段进入世界哈希，
 ///   必须让同一个种子在不同平台逐格生成同一张图（§10.7）。
 /// </summary>
@@ -16,8 +19,11 @@ public static class MapGen
 {
     private const long NoiseScale = 1_000_000;
 
-    /// <summary>默认地图半径（轴坐标到中心的最大距离）。半径 4 = 61 格，够摆出盆地又不至于刷屏。</summary>
-    public const int DefaultRadius = 4;
+    /// <summary>默认地图宽度（列数，§3.9 / §13.1 的 32 × 20）。</summary>
+    public const int MapColumns = 32;
+
+    /// <summary>默认地图高度（行数）。</summary>
+    public const int MapRows = 20;
 
     /// <summary>pointy-top 六边形的六个邻居方向（轴坐标，§3.1）。行军与辖地都按这个邻接表走。</summary>
     public static readonly (int dq, int dr)[] Neighbors =
@@ -46,24 +52,49 @@ public static class MapGen
 
     public static EntityId HexId(int q, int r) => new($"hex.{q:000}.{r:000}");
 
+    /// <summary>
+    /// odd-r 偏移坐标 (col, row) → 轴坐标 (q, r)。屏幕上的「列」在奇数行右移半格，
+    /// 换成轴坐标后 x = √3·size·(q + r/2) 正好还是矩形（§3.9 的 32 × 20）。
+    /// 存世界的是轴坐标，所以距离与邻接仍走 §3.1 的标准公式。
+    /// </summary>
+    public static (int q, int r) AxialOfOffset(int col, int row) =>
+        (col - ((row - (row & 1)) / 2), row);
+
+    /// <summary>矩形地图上第 (col, row) 格的地块 id。</summary>
+    public static EntityId HexIdAt(int col, int row)
+    {
+        var (q, r) = AxialOfOffset(col, row);
+        return HexId(q, r);
+    }
+
     /// <summary>新开局建图。由 <see cref="BasicPlugin"/> 注册为 bootstrap，输入只有种子与数据（§8.3）。</summary>
     public static void Bootstrap(IStepContext ctx)
     {
-        int radius = (int)ctx.GetInt(World.GlobalId, F.ConfigMapRadius, DefaultRadius);
-        if (radius is < 1 or > 12)
-            throw new SimDataException($"{F.ConfigMapRadius}={radius} 越界（1–12），拒绝建图");
+        int columns = (int)ctx.GetInt(World.GlobalId, F.ConfigMapColumns, MapColumns);
+        int rows = (int)ctx.GetInt(World.GlobalId, F.ConfigMapRows, MapRows);
+        if (columns is < 8 or > 128)
+            throw new SimDataException($"{F.ConfigMapColumns}={columns} 越界（8–128），拒绝建图");
+        if (rows is < 8 or > 128)
+            throw new SimDataException($"{F.ConfigMapRows}={rows} 越界（8–128），拒绝建图");
 
         var grades = GradeTable(ctx.Data.OfType(F.TypeLandform));
 
+        int maxEdgeCol = (columns - 1) / 2;
+        int maxEdgeRow = (rows - 1) / 2;
+
         var tally = new SortedDictionary<string, long>(StringComparer.Ordinal);
         int created = 0;
-        for (int q = -radius; q <= radius; q++)
-            for (int r = Math.Max(-radius, -q - radius); r <= Math.Min(radius, -q + radius); r++)
+        for (int row = 0; row < rows; row++)
+            for (int col = 0; col < columns; col++)
             {
-                int dist = Distance(q, r);
-                long rim = (long)dist * NoiseScale / radius;
+                var (q, r) = AxialOfOffset(col, row);
 
-                // §3.7 第 1 步：高度 = 外环抬升 + 两层值噪声。盆地由「中心低、四周高」自然围出来。
+                // §3.7 第 1 步：高度 = 边缘抬升 + 两层值噪声。
+                // 边缘量取「离四条边最近的距离」分别在两轴上归一化后取大者，
+                // 于是高地沿着矩形轮廓围一圈，中央留出可种地的低地（大陆轮廓 + 边缘衰减）。
+                long rimCol = (long)(maxEdgeCol - Math.Min(col, columns - 1 - col)) * NoiseScale / maxEdgeCol;
+                long rimRow = (long)(maxEdgeRow - Math.Min(row, rows - 1 - row)) * NoiseScale / maxEdgeRow;
+                long rim = Math.Max(rimCol, rimRow);
                 long noise = (62 * Smooth(ctx, q, r, 3, 1) + 38 * Smooth(ctx, q, r, 2, 7919)) / 100;
                 long rimCurve = rim * IntegerSqrt(rim * NoiseScale) / NoiseScale;
                 long raw = 8 * NoiseScale + 86 * rimCurve + 30 * (noise - NoiseScale / 2);
@@ -83,14 +114,15 @@ public static class MapGen
                 ctx.Mutate(id, F.HexDefense, landform.GetInt("defense"), "§3.6 地表防御：M1 只写不算，军事在 M6");
                 ctx.Mutate(id, F.HexBuildable, SimValue.OfBool(landform.Get("buildable").AsBool()), "§3.2 可否建城（山地只能做隘口）");
                 ctx.Mutate(id, F.HexYieldFood, landform.GetFix("potential.food"),
-                    "Y_g 粮潜力（§3.6 第一行）。M1 无形胜/资源/水利，后三个倍率暂为 1.00");
+                    "Y_g 粮潜力（§3.6 第一行）。M2 切片一仍无形胜/资源/水利，后三个倍率暂为 1.00");
                 created++;
             }
 
         var detail = string.Join("、", tally.Select(kv =>
             $"{ctx.Data.Get(kv.Key).GetStr("title")} {kv.Value} 格"));
-        ctx.Note($"地图：半径 {radius} 共 {created} 格 —— {detail}");
-        ctx.Mutate(World.GlobalId, "meta.mapRadius", radius, "建图半径写回全局，UI 画边界与无头报告都要读");
+        ctx.Note($"地图：{columns} × {rows} 共 {created} 格 —— {detail}");
+        ctx.Mutate(World.GlobalId, "meta.mapColumns", columns, "建图列数写回全局，UI 画边界与无头报告都要读（§3.9）");
+        ctx.Mutate(World.GlobalId, "meta.mapRows", rows, "建图行数写回全局");
         ctx.Mutate(World.GlobalId, "meta.mapTiles", created, "地块总数");
     }
 

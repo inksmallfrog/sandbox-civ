@@ -4,6 +4,8 @@
 > GDD §11.4 规定的开工顺序就是本节引用的顺序：本文件 → [`docs/AI_HANDOFF.md`](docs/AI_HANDOFF.md) §0 与 §5
 > → [`docs/GDD.md`](docs/GDD.md) §10 + 附录 A → 要动的子系统章节。
 > 开始前还要按 [`docs/DEV_ENVIRONMENTS.md`](docs/DEV_ENVIRONMENTS.md) 探测当前宿主；不要假定路径、操作系统或工具已配置。
+> **开工第一步先从 `origin` 同步**：`git fetch origin` 并把当前分支快进到远端最新；本地有未提交改动先提交或另存，
+> 不许覆盖。详见 §8 第一条。
 > 本文件只写「不许做什么」和「怎么验」。**规则内容的唯一来源是 GDD**，这里不重抄。
 
 ---
@@ -17,9 +19,9 @@
 
 ## 2. 当前阶段
 
-**M1 Core 已完成并当场复验；M0 的 CI 工作流已补，只差首次远端双系统全绿。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
+**M1 Core 已完成并当场复验；M2 的地图骨架（32×20 + 建图计时）已完成；M0 的 CI 工作流已补，只差首次远端双系统全绿。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
 
-- 能跑的东西：无头模拟器 `sim`（6 个动词）、Godot 窗口壳（画地图 + 点格建城 + headless 冒烟）。
+- 能跑的东西：无头模拟器 `sim`（6 个动词）、Godot 窗口壳（32×20 地图 + 点格建城 + headless 冒烟）。
 - 还不能跑的东西：价格（公式二）、八阶级（只有农民）、AP、名人、军事、外交、事件、联机传输。
 - 演示版本：`dotnet run --project src/HexaCiv.Cli -- run --seed 7 --turns 12 --steps --explain`。
 
@@ -48,7 +50,7 @@ src/Plugins/core.basic/ 参考规则包：7 个 .cs + manifest.json（M1 的全�
 src/HexaCiv.Cli/       无头壳层（sim：Program / Runner / Script / AsciiMap）
 src/GodotShell/        窗口壳层（Main.cs / HexView.cs / Main.tscn / project.godot）
 data/                  _schema.json + core.basic/*.json（数值只住在这里）
-tests/SimCore.Tests/   xUnit，60 条
+tests/SimCore.Tests/   xUnit，63 条
 scripts/               demo.txt（命令脚本）、godot-smoke.txt（跨宿主对账脚本）
 analysis/out/          基线 CSV（gitignore，**是产物不是现状**）
 saves/                 回归样本档（.bin 被 ignore，只留 .gitkeep）
@@ -98,7 +100,7 @@ build/plugins/         core.basic.dll 的落点，宿主从这里装（gitignore
 
 ```bash
 dotnet build -v q --nologo                  # 必须 0 错误（警告 = 错误）
-dotnet test --nologo                        # 60 绿，0 跳过
+dotnet test --nologo                        # 63 绿，0 跳过
 dotnet run --project src/HexaCiv.Cli -- check                      # 数据包 + 清单 + 15 步 + 21 落点全表
 dotnet run --project src/HexaCiv.Cli -- hash  --seed 99 --turns 50  # 确定性自检
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5 --turns 20 --at 12
@@ -110,9 +112,9 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 
 | 命令 | 期望 |
 |---|---|
-| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `1cd6f74b25e33aa3`，**且必须与 Godot 冒烟同值** |
-| `… replay --seed 5 --turns 20 --at 12` | 快照往返 `9b82e9599ae198cd`；续跑 = 一口气跑满 `482c8643eada3e64` |
-| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 89 / hash `66769b250054b11e` |
+| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `e0909883c6019fba`，**且必须与 Godot 冒烟同值** |
+| `… replay --seed 5 --turns 20 --at 12` | 快照往返 `2b4879a4f1de53f9`；续跑 = 一口气跑满 `49b257e9a5ce3fe4` |
+| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 174 / hash `8ff2b81f535a32b6` |
 | `… check` | `dataHash af324b5a33571234`，15 步、21 落点（**7 个不落在任何步骤**） |
 
 `dotnet test` 不覆盖跨宿主一致性：改过 `src/GodotShell/Main.cs` 的 `Smoke()` 参数，
@@ -120,6 +122,10 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 
 ## 8. Git 规范
 
+- **开工前先同步远端**：写第一行代码之前执行 `git fetch origin`，并把当前分支快进到远端最新
+  （`git pull --ff-only`；未设置上游时用 `git pull --ff-only origin <当前分支>`）。
+  多宿主轮流开发，落后于远端的本地基线会让复验数字与文档对不上。同步前先看 `git status`：
+  有未提交改动先提交或安全另存，**不许**用 `reset --hard` / 清理命令覆盖；若快进被拒，停下来向人确认，不要强改历史。
 - **Conventional Commits + 中文正文**，例：`fix(core.basic): 低粮安不再把人口冻死在定点刻度上`。
   带影响标签：`[数值零变化]` / `[破存档→已附迁移器]` / `[改手感]`。
 - **关键任务完成时就提交**，不许攒到最后统一提交（设计者的硬约束，回滚粒度是交付要求的一部分）。
@@ -144,9 +150,9 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 | 层 | 内容 | 证据 |
 |---|---|---|
 | SimCore | 九项职责全部实现（世界存储 / 15 步调度 / 分层 RNG / 数据注册 / 不变量 / 因果链 / 命令流 / 存档回放迁移 / 插件宿主）+ 同步层与分块哈希铺好接缝 | `AI_HANDOFF.md` §2.1、`ROADMAP.md` §2.2 |
-| core.basic | 半径制六边形图（§3.7 前两步）→ 建国 → 建城 → 开荒/起仓 → 产粮（公式一）→ 消耗 → 配给 → 满意度（公式三）→ 人口 → 不安计数 → 年报；**2/3 条公式** | `BALANCE.md` §1/§3/§4 |
-| 壳层 | CLI 6 动词 + 选项集；Godot 窗口（绘制 / 拾取 / 侧栏 / 年报 / 183 拾取命中全对） | `ROADMAP.md` §2 |
-| 测试 | 60 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 14 / 验收 14 | `TEST_PLAN.md` §2 |
+| core.basic | 32×20 矩形六边形图（§3.7 前两步、§3.9）→ 建国 → 建城 → 开荒/起仓 → 产粮（公式一）→ 消耗 → 配给 → 满意度（公式三）→ 人口 → 不安计数 → 年报；**2/3 条公式** | `BALANCE.md` §1/§3/§4 |
+| 壳层 | CLI 6 动词 + 选项集；Godot 窗口（绘制 / 拾取 / 侧栏 / 年报 / 640 格全格拾取自检） | `ROADMAP.md` §2 |
+| 测试 | 63 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 17 / 验收 14 | `TEST_PLAN.md` §2 |
 | 文档 | §11.1 要求的 13 份全部落地（GDD 之外 12 份 + REQUIREMENTS）+ 本文件 | `ROADMAP.md` §2.1 |
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
@@ -156,13 +162,14 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 2. **两条接缝是「解析了但没人用」**：`SimConfig.YearLimit`（120/200 年不会自动结束）、
    `manifest.data_packs`（卡包开关还不生效）。**别误判成已生效**——前者归 M9，后者归 M8。
 3. **守恒等式没实现**（§5.9 前三条）：M1 没有进口/出口，现在只有范围与符号不变量兜着。归 M3。
-4. **`--steps` 测不到地图生成**：它是 bootstrap，不在 15 步上，§12 的「32×20 < 1 s」现在**无从判定**。
-   归 M2 第一件事（给 `sim map` 加一行 bootstrap 计时）。
+4. **建图计时已经有了**：`sim map` 会打印插件的建图耗时（32×20 实测约 35 ms，判据 < 1 s）。
+   剩余地图工作（河流 / 形胜 / 资源 / 图层 4–5）归 M2 后续切片。
 5. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
    本仓库已经有一次结论被旧 CSV 带偏。
 6. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
 7. **分支仍叫 `master`，CI 尚待远端首验**：当前已有 `origin` remote，但双系统工作流实际全绿前，任何「CI 绿」的主张都没有证据基础。
-8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 已改为整数定点和整数平方根，`CoreInfo.MapGenVersion=2`，Windows CLI/Godot 对账通过；CI 首验要在 ubuntu + windows 上复核同种子地图哈希。
+8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 已改为整数定点和整数平方根，地图形状为 32×20 矩形，
+   `CoreInfo.MapGenVersion=3`；本机（宿主 #1）CLI 复验通过，Godot 4.7.2 冒烟因该机未装对应引擎尚未执行。
 
 ## 11. 下一项任务（按顺序，不跳队）
 
@@ -170,8 +177,8 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
    把首个 Linux 哈希写回 `BALANCE.md` / `CHANGELOG-DESIGN.md`；本地等价复验不能替代这一步。
 2. **重写根 [`Readme.md`](Readme.md)**：人类入口，一条命令 + 一张截图 + 指回本文件（需求原文已在 `REQUIREMENTS.md`）。
 3. **打 tag `v0.0` / `v0.1`，并把 `master` → `main`**（D-002 的三步；`develop` / `feature/*` 有理由地推迟）。
-4. **然后开 M2 地图**：范围与三条接口前置改动（半径制 → 32×20 矩形、`CoreInfo.MapGenVersion` +1、
-   选址只改 `Siting.BestTownSite`）在 [`docs/ROADMAP.md`](docs/ROADMAP.md) §3。**M1 验收不过不许开 M2**（§12 推进规则）。
+4. **继续 M2 地图**：形状（32×20）与建图计时已在切片一完成；剩余河流（§3.3）、12 种形胜（§3.4）、
+   门槛资源（§3.5）、图层 4–5（§3.9）在 [`docs/ROADMAP.md`](docs/ROADMAP.md) §3。**M1 验收不过不许开 M2**（§12 推进规则）。
 
 ## 12. 不可违反的架构原则
 

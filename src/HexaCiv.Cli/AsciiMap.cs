@@ -1,36 +1,37 @@
 using System.Text;
+using CoreBasic;
 using SimCore;
 
 namespace HexaCiv.Cli;
 
 /// <summary>
-/// ASCII 地图（§3.1 轴坐标的人读视图）。
+/// ASCII 地图（§3.1 轴坐标的人读视图，§3.9 的 32 × 20 矩形）。
 ///
 /// 它的价值不在好看，而在「一眼看出种子有没有长出合理的图」：
-/// 盆地有没有被高地围住、可建城格够不够、城是不是挤在一起。
+/// 边缘高地有没有围住中央低地、可建城格够不够、城是不是挤在一起。
 /// Godot 壳层负责真正的渲染，这个版本是给无头调试与文档截图用的。
 /// </summary>
 public static class AsciiMap
 {
     public static string Render(Simulation sim)
     {
-        int radius = (int)sim.World.GetInt(World.GlobalId, "meta.mapRadius", 4);
+        int columns = (int)sim.World.GetInt(World.GlobalId, "meta.mapColumns", MapGen.MapColumns);
+        int rows = (int)sim.World.GetInt(World.GlobalId, "meta.mapRows", MapGen.MapRows);
         var world = sim.World;
 
         var sb = new StringBuilder();
-        sb.AppendLine("        " + string.Join("", Enumerable.Range(-radius, radius * 2 + 1).Select(q => $"q{q:+0;-0} ")));
-        for (int r = -radius; r <= radius; r++)
+        sb.AppendLine($"地图 {columns} × {rows}（§3.9；每行左边是 r，顶部一行是个位列，重复 0–9）");
+        sb.AppendLine("     " + string.Concat(Enumerable.Range(0, columns).Select(c => $"{(char)('0' + c % 10)} ")));
+        for (int row = 0; row < rows; row++)
         {
-            int pad = Math.Max(0, (r + radius));                       // 六边形每行左移量
-            int qLo = Math.Max(-radius, -r - radius), qHi = Math.Min(radius, -r + radius);
             var cells = new StringBuilder();
-            for (int q = qLo; q <= qHi; q++)
+            for (int col = 0; col < columns; col++)
             {
-                var id = new EntityId($"hex.{q:000}.{r:000}");
+                var id = MapGen.HexIdAt(col, row);
                 var ent = world.Get(id);
                 cells.Append(ent is null ? "· " : Glyph(world, ent) + " ");
             }
-            sb.AppendLine($"r{r:+0;-0} {new string(' ', pad)}|{cells}|  ({qLo}…{qHi})");
+            sb.AppendLine($"r{row:00} |{cells}|");
         }
 
         sb.AppendLine();

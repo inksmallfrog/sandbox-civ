@@ -10,7 +10,7 @@
 
 ## 0. 一分钟版
 
-- **M1 Core 已经立住，M0 只差 CI 首次远端双系统全绿**。三 job × ubuntu/windows 的工作流已补；60 条测试与 Windows 宿主 #2 的基线当场复验过（§1 表格）。
+- **M1 Core 已经立住，M2 的地图骨架（32×20 矩形 + 建图计时）已完成，M0 只差 CI 首次远端双系统全绿**。三 job × ubuntu/windows 的工作流已补；63 条测试与宿主 #1 的基线当场复验过（§1 表格）。
 - **接手第一件事不是写代码，是识别宿主并跑 §6 的复验命令**。按 `DEV_ENVIRONMENTS.md` 探测 OS、.NET SDK 与 Godot .NET 版本；有对不上的，先修环境再动代码——
   这个仓库的正确性主张全靠「同种子同命令流 → 同哈希」撑着，跑不出来时任何改动都无法判断好坏。
 - **读的顺序（§11.4 原文）**：本文件 → `AGENTS.md` → GDD §10 + 附录 A → 要动的子系统章节。
@@ -22,23 +22,22 @@
 
 ## 1. 仓库实况（2026-11-13 当场核对）
 
-> Windows 宿主 #2 复核（2026-11-13）：.NET SDK 8.0.428 位于 `C:\Program Files\dotnet\dotnet.exe`；本次通过完整路径运行。
-> `.slnx` 在该 SDK 不受支持，已换成 `HexaCiv.sln`。根解决方案 build 0 警告/错误、60 测试全绿；CLI `check` / hash / replay、
-> 空世界 1000 回合、200 年基线与 Godot .NET 4.7.2 smoke 均通过。地图噪声已改为整数定点，MapGenVersion=2。
-> 新基线见下表。`.github/workflows/ci.yml` 已补齐三 job × ubuntu/windows，下载地址与 YAML 结构已检查，Windows 宿主 #2 已按同步骤复验；
-> 但远端首跑尚未执行，跨 OS 仍未验证，M0 保持 🟡。三台开发机的识别和状态见 `DEV_ENVIRONMENTS.md`；宿主 #1 的当前工具链需复核，Mac 宿主尚未探测。
+> 宿主 #1 复核（2026-11-13）：.NET SDK 10.0.201（共享运行时含 8.0.25），`dotnet build/test/check/hash/replay` 全通过；
+> 该机**未安装 Godot 4.7.2 .NET**（只有旧的 4.6.1 mono），所以本轮 Godot smoke 未执行，跨宿主对账仍以 Windows #2 / CI 为准。
+> 地图形状已从半径制改为 32×20 矩形，MapGenVersion 升到 3。新基线见下表；旧半径制地图的哈希全部作废，这是 §3.7 明写的地图重排。
 
 | 项 | 值 | 复现 |
 |---|---|---|
-| 分支 | `master` 跟踪 `origin/master`；本轮复核与 CI 提交保留在本地，未推送 | `git branch -vv` / `git log -1 --oneline` |
-| 工作区 | 仍有交接前留下的 README / 宿主文档改动，本轮不接管；以 status 为准 | `git status --short` |
-| 测试 | **60 绿，0 跳过** | `dotnet test --nologo` |
-| 确定性自检 | `e6c324ac3bcfbe3b`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
-| 跨宿主末回合哈希 | `1cd6f74b25e33aa3`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值 |
-| 快照往返 | `9b82e9599ae198cd`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
-| 续跑等价 | `482c8643eada3e64`（一口气跑满 = 存盘续跑） | 同上 |
-| 200 年基线 | seed 42 末态 `66769b250054b11e`，`dataHash af324b5a33571234`，2 城 / 人口 89 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` |
-| 代码量 | SimCore 20 文件 / 3404 行 · core.basic 7 / 1027 · CLI/Godot 646/642 · 测试 1153 | 排除 `bin/obj` 后统计 `.cs` 行 |
+| 分支 | `master` 与 `origin/master` 同步在 `097ca4c`（本机未设 upstream，按 `git pull --ff-only origin master` 快进） | `git branch -vv` / `git fetch origin` |
+| 工作区 | 本轮 M2 切片一改动（地图骨架 + 文档 + 规则）随 D-033 提交；以 status 为准 | `git status --short` |
+| 测试 | **63 绿，0 跳过** | `dotnet test --nologo` |
+| 确定性自检 | `856535a916aa2e20`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
+| 跨宿主末回合哈希 | `e0909883c6019fba`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`）；**本机只验了 CLI，Godot 待 #2/CI** | `sim hash` 与 Godot `-- --smoke` |
+| 快照往返 | `2b4879a4f1de53f9`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
+| 续跑等价 | `49b257e9a5ce3fe4`（一口气跑满 = 存盘续跑） | 同上 |
+| 200 年基线 | seed 42 末态 `8ff2b81f535a32b6`，`dataHash af324b5a33571234`，2 城 / 人口 174 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` |
+| 建图耗时 | 约 35 ms / 640 格（§12 M2 判据 < 1000 ms） | `sim map --seed 7` 的 `core.basic：建图 … ms` |
+| 代码量 | SimCore 20 文件 / 3404 行 · core.basic 7 / 1064 · CLI/Godot 656/687 · 测试 1196 | 排除 `bin/obj` 后统计 `.cs` 行 |
 
 **上面每一个数字都是这次会话里重跑出来的**，不是从旧文档抄的。改动作废它们不算违约，
 但请把 §6 那六条命令当作收工自检跑一遍，把新值写回 `docs/ROADMAP.md` §2 和这里。
@@ -68,18 +67,18 @@
 
 ### 2.2 core.basic（M1 循环的全部规则都在这一个插件里）
 
-半径制六边形图（§3.7 前两步）→ 建国 → 建城（§3.8 距离闸门）→ 开荒 / 起仓 →
+32×20 矩形六边形图（§3.7 前两步、§3.9）→ 建国 → 建城（§3.8 距离闸门）→ 开荒 / 起仓 →
 产粮（公式一，§5.4 步 6 损耗）→ 吃粮 → 配给 → 满意度（公式三 + 正态扰动）→ 人口
 （零头桶累积）→ 不安与反抗计数 → 年报。三条公式实装两条（价格没有），21 个落点里挂了 11 个
 处理器，3 条命令，1 组不变量，3 个图层。逐条常数与解析解在 `BALANCE.md` §1/§3。
 
 ### 2.3 两个壳层
 
-- **CLI**（`src/HexaCiv.Cli`，718 行）：`run / check / hash / map / peek / replay / help` 六个动词 +
+- **CLI**（`src/HexaCiv.Cli`，656 行）：`run / check / hash / map / peek / replay / help` 六个动词 +
   `--seed --turns --at --out --save --load --script --data --plugins --no-plugins --no-data --steps --explain --lenient --quiet`。
   动词表在 `Program.cs:15` 的 `UsageText`，改参数别只改代码。
-- **GodotShell**（`src/GodotShell`，739 行）：六边形绘制 + 点格建城 + 侧栏 + 年报 + `-- --smoke`
-  headless 自检（含 183/183 拾取命中与字体诊断）。**刻意不进 `.sln`**，理由见 `ARCH.md` §5。
+- **GodotShell**（`src/GodotShell`，687 行）：六边形绘制 + 点格建城 + 侧栏 + 年报 + `-- --smoke`
+  headless 自检（含 640 格 × 3 点拾取命中与字体诊断）。**刻意不进 `.sln`**，理由见 `ARCH.md` §5。
 
 ---
 
@@ -91,11 +90,15 @@
 | `88b5859` | 修一批指错章节的 GDD 引用 + 补 BALANCE / ROADMAP | D-030 |
 | `1fe9876` | .NET 8 solution + 地图整数定点与存档版本回归 | D-031 / D-032 |
 | 本轮 CI | 三 job × ubuntu/windows 工作流 + Windows #2 等价复验 + 更正 seed 99 文档基线 | D-032（补漏记基线）；CI 本身数值零变化 |
+| 本轮 M2-1 | 地图 32×20 矩形 + `MapGenVersion=3` + `sim map` 建图计时 + Godot 缩放/拾取适配 + 3 条地图测试 | D-033（附全基线重排表） |
 
-D-020 是这次会话里唯一的**行为变更**：`SeasonRules.Demography` 里 `0.04 × 粮安` 只有 0.00xx 量级，
+D-020 是 M1 阶段唯一的**行为变更**：`SeasonRules.Demography` 里 `0.04 × 粮安` 只有 0.00xx 量级，
 在 ×100 定点下 `粮安 ≤ 0.62` 时被截成 0，乘回人口还是 0，于是人口永久卡在地块上限。
 改法是先把 P 乘进去、全程只在最后截一次。分叉范围：前 62 年逐回合哈希不变，
 200 年基线 `859a9a0963fb2267` → `36c3463658b99a90`（seed 42 从「第 83 年起冻死 117 年」变成「第 200 年 89 个百人单位」）。
+
+D-033 是本轮的**地图重排**：格数 61 → 640，所有地图相关哈希与 200 年基线整体换值；
+旧半径制地图的存档仍能读回（快照自带地图数据），但新开局不再长旧图。逐项差异见 `CHANGELOG-DESIGN.md` D-033。
 
 ---
 
@@ -106,8 +109,8 @@ D-020 是这次会话里唯一的**行为变更**：`SeasonRules.Demography` 里
 | 1 | **CI 首验**（工作流已补，M0 只剩实际运行证据） | 推送后三个 job 在 ubuntu + windows 上都绿；把首个 Linux 哈希写回文档；M0 才打 `v0.0` | `TEST_PLAN.md` §6 |
 | 2 | 根 `Readme.md` 已补齐；三台宿主探测指南见 `DEV_ENVIRONMENTS.md` | 玩家视角：一条命令跑起来 + 一张截图 + 指回 `AGENTS.md`；主机 #1 与 Mac 的工具链信息待首次实测补录 | `CHANGELOG-DESIGN.md` D-004 |
 | 3 | tag `v0.0`（M0）/ `v0.1`（M1）+ `master` → `main` 改名 | §11.2 的 tag 表；`v0.2` 的语义冲突挂在 D-001 | `CHANGELOG-DESIGN.md` §1 |
-| 4 | **M2 地图**：32×20 矩形、河网 / 形胜 / 门槛资源、bootstrap 计时 | §3.7 六步全跑 + 三条验收各给得出证据 | `ROADMAP.md` §3 |
-| 5 | M2 的三条接口前置改动（半径制 → 矩形、`CoreInfo.MapGenVersion` +1、只改 `Siting`） | 旧种子旧图必须仍然可复现，或明确记录重排 | `ROADMAP.md` §3 |
+| 4 | **M2 地图**：形状（32×20 矩形）与建图计时已在切片一完成；剩余河网 / 形胜 / 门槛资源 / 图层 4–5 | §3.7 六步全跑 + 三条验收各给得出证据 | `ROADMAP.md` §3 |
+| 5 | M2 后续接口：`Siting.BestTownSite` 接形胜与资源、`CoreInfo.MapGenVersion` 随算法继续递增 | 旧种子旧图必须仍然可复现，或明确记录重排 | `ROADMAP.md` §3 |
 
 ---
 
@@ -172,7 +175,7 @@ CLI 用默认 `AssemblyLoadContext`，Godot 用它自己的脚本上下文；把
 
 **坑 11 — 跨宿主一致性不在 `dotnet test` 里，要手动跑两条。**
 `sim hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` 与
-`godot --headless --path src/GodotShell -- --smoke` 必须同为 `1cd6f74b25e33aa3`。
+`godot --headless --path src/GodotShell -- --smoke` 必须同为 `e0909883c6019fba`（MapGenVersion=3）。
 改 `Main.cs` 的 `Smoke()` 参数**必须同步改 `scripts/godot-smoke.txt`**，两边逐字相同才有意义（`TEST_PLAN.md` §3）。
 
 **坑 12 — GodotShell 不在 `.sln` 里**：`dotnet build` 不编它，验收要靠 Godot 可执行文件单独跑
@@ -201,7 +204,9 @@ smoke 会打 `FallbackFont=FontFile FallbackFontSize=16`。没装 CJK 字体的�
 **坑 17 — 规则改动没有 `CHANGELOG-DESIGN.md` 条目 = 未完成**（§11.3 第 4 条）。
 数值改动还要附「改了什么 / 为什么 / 模拟差异」表（第 1 条）。破存档必须附迁移器 + 旧档回归（第 3 条）。
 
-**坑 18 — 地图生成曾用浮点中间量（已修复）。** `MapGen.Bootstrap` 现以整数定点噪声与整数平方根写入 `hex.height` / `hex.landform`，并把 `CoreInfo.MapGenVersion` 升到 2。当前 Windows CLI/Godot 同哈希；跨 OS 地图基线仍待 CI。
+**坑 18 — 地图生成曾用浮点中间量（已修复）。** `MapGen.Bootstrap` 以整数定点噪声与整数平方根写入 `hex.height` / `hex.landform`；
+M2 切片一把形状改为 32×20 矩形并把 `CoreInfo.MapGenVersion` 升到 3，旧半径制地图的哈希全部重排（预期行为）。
+Windows #2 曾在 MapGenVersion=2 下验证 CLI/Godot 同哈希；MapGenVersion=3 的跨宿主对账待宿主 #2 或 CI 补。
 
 ---
 
@@ -209,7 +214,7 @@ smoke 会打 `FallbackFont=FontFile FallbackFontSize=16`。没装 CJK 字体的�
 
 ```bash
 dotnet build -v q --nologo                          # 0 错误（warning = error，坑 9）
-dotnet test --nologo                                # 60 绿
+dotnet test --nologo                                # 63 绿
 dotnet build src/GodotShell/HexaCiv.GodotShell.csproj # GodotShell 不在 solution，单独编译以免加载旧 DLL
 dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
 dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12

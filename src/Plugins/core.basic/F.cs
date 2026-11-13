@@ -26,7 +26,8 @@ public static class F
     public const string TypeBuilding = "building";
 
     // ---- 全局标量（寄居在 world.0000 上）----
-    public const string ConfigMapRadius = "config.mapRadius";   // int：scenario 包可以在 bootstrap 前改写它
+    public const string ConfigMapColumns = "config.mapColumns"; // int：scenario 包可以在 bootstrap 前改写它
+    public const string ConfigMapRows = "config.mapRows";
 
     // ---- 地块 ----
     public const string HexLandform = "hex.landform";    // str: landform.*

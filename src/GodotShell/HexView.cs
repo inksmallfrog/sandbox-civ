@@ -27,6 +27,8 @@ public partial class HexView : Node2D
     private EntityId _hover;
     private EntityId _selected;
     private Node2D? _labels;
+    private float _fitScale = 1f;
+    private Vector2 _mapCenter;
 
     /// <summary>辖地着色用的城色板：UI 资产，不进模拟（同一座城在任何一台机器上都是这个颜色，因为它按城序取）。</summary>
     private static readonly Color[] TownTints =
@@ -38,7 +40,7 @@ public partial class HexView : Node2D
     public override void _Ready()
     {
         // 地图要跟着窗口中心走，否则拉大窗口后画面偏在一角
-        GetViewport().SizeChanged += () => QueueRedraw();
+        GetViewport().SizeChanged += () => { LayoutMap(); QueueRedraw(); };
     }
 
     public void Bind(Simulation sim)
@@ -46,8 +48,44 @@ public partial class HexView : Node2D
         _sim = sim;
         _hover = default;
         _selected = default;
+        LayoutMap();
         QueueRedraw();
         RefreshLabels();
+    }
+
+    /// <summary>
+    /// 把整张矩形地图（§3.9 的 32 × 20）缩放进窗口可用区域。
+    /// 拾取走 <c>ToLocal</c>，会自带这里的 Position/Scale，所以点击不会和画面错位。
+    /// 左侧状态栏与顶部按钮条要让出来——数值与 <c>Main.BuildHud</c> 的布局一致，改那边要同步这里。
+    /// </summary>
+    private void LayoutMap()
+    {
+        if (_sim is null) return;
+        float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+        foreach (var hex in _sim.World.OfKind("hex"))
+        {
+            var (q, r) = AxialOf(hex);
+            Vector2 p = Pixel(q, r);
+            minX = Mathf.Min(minX, p.X); maxX = Mathf.Max(maxX, p.X);
+            minY = Mathf.Min(minY, p.Y); maxY = Mathf.Max(maxY, p.Y);
+        }
+        if (minX > maxX) { _fitScale = 1f; _mapCenter = Vector2.Zero; return; }
+
+        // 六边形的外接框：横向半宽 √3/2·size，纵向半高 size
+        const float halfWidth = 0.8660254f * HexSize;
+        minX -= halfWidth; maxX += halfWidth; minY -= HexSize; maxY += HexSize;
+
+        const float hudLeft = 480f, hudTop = 74f, margin = 12f;
+        Vector2 vp = GetViewportRect().Size;
+        float availW = Mathf.Max(320f, vp.X - hudLeft - margin);
+        float availH = Mathf.Max(240f, vp.Y - hudTop - margin);
+        float mapW = Mathf.Max(1f, maxX - minX);
+        float mapH = Mathf.Max(1f, maxY - minY);
+
+        _fitScale = Mathf.Min(1.25f, Mathf.Min(availW / mapW, availH / mapH));
+        _mapCenter = new Vector2((minX + maxX) / 2f, (minY + maxY) / 2f);
+        Scale = new Vector2(_fitScale, _fitScale);
+        Position = new Vector2(hudLeft, hudTop) + new Vector2(availW, availH) / 2f - _mapCenter * _fitScale;
     }
 
     /// <summary>
@@ -62,11 +100,14 @@ public partial class HexView : Node2D
     public void RefreshLabels()
     {
         if (_sim is null) return;
+        LayoutMap();
         if (_labels is null) _labels = new Node2D { Name = "TownLabels" };
         var host = _labels;
         if (!host.IsNodeReady()) AddChild(host);                  // Bind 可能早于 _Ready，这里补挂
         foreach (var child in host.GetChildren()) child.QueueFree();
 
+        // 标签节点跟着 HexView 一起缩放，字号要反着放大，屏幕上才是稳定大小
+        int fontSize = Mathf.Clamp(Mathf.RoundToInt(15f / Mathf.Max(_fitScale, 0.05f)), 10, 60);
         foreach (var hex in _sim.World.OfKind("hex"))
         {
             string townId = hex.GetStr("hex.town");
@@ -82,7 +123,7 @@ public partial class HexView : Node2D
                 HorizontalAlignment = HorizontalAlignment.Center,
                 MouseFilter = Control.MouseFilterEnum.Ignore,     // 名字不能挡点击
             };
-            label.AddThemeFontSizeOverride("font_size", 15);
+            label.AddThemeFontSizeOverride("font_size", fontSize);
             label.AddThemeColorOverride("font_color", new Color(0.97f, 0.97f, 0.99f));
             label.AddThemeColorOverride("font_outline_color", new Color(0.05f, 0.05f, 0.07f, 0.9f));
             label.AddThemeConstantOverride("outline_size", 4);
@@ -102,7 +143,7 @@ public partial class HexView : Node2D
         var world = _sim.World;
         if (world.Get(World.GlobalId) is null) return;
 
-        Position = GetViewportRect().Size / 2f;          // 轴坐标 (0,0) 落在视口中心
+        LayoutMap();                                     // Position/Scale 由它按视口与地图尺寸算（32×20 放不进窗口）
 
         // 城色按 id 升序取色板，保证「同一个存档、同一座城、同一个颜色」
         var tint = new Dictionary<string, Color>(StringComparer.Ordinal);

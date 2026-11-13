@@ -36,6 +36,56 @@ public class CoreBasicTests
     private static List<Entity> Tiles(Simulation sim, EntityId town) =>
         sim.World.OfKind("hex").Where(h => F.IdOf(sim.World.GetStr(h.Id, F.HexOwner, "")) == town).ToList();
 
+    // ================= 地图（§3.7 / §3.9 / §12 M2）=================
+
+    [Fact]
+    public void 地图是32乘20且id与轴坐标互证()
+    {
+        var sim = Open(7);
+        var hexes = sim.World.OfKind("hex");
+
+        Assert.Equal(MapGen.MapColumns * MapGen.MapRows, hexes.Count);
+        Assert.Equal(MapGen.MapColumns, sim.World.GetInt(World.GlobalId, "meta.mapColumns", 0));
+        Assert.Equal(MapGen.MapRows, sim.World.GetInt(World.GlobalId, "meta.mapRows", 0));
+        Assert.Equal(hexes.Count, sim.World.GetInt(World.GlobalId, "meta.mapTiles", 0));
+
+        // 按 odd-r 偏移坐标逐格点名，一格不许少、一格不许重
+        for (int row = 0; row < MapGen.MapRows; row++)
+            for (int col = 0; col < MapGen.MapColumns; col++)
+            {
+                var (q, r) = MapGen.AxialOfOffset(col, row);
+                var id = MapGen.HexIdAt(col, row);
+                var hex = sim.World.Get(id);
+                Assert.NotNull(hex);
+                Assert.Equal(q, hex!.GetInt(F.HexQ));
+                Assert.Equal(r, hex.GetInt(F.HexR));
+                Assert.Equal((q, r), MapGen.Coords(id));
+            }
+        Assert.Equal(hexes.Count, hexes.Select(h => h.Id.Value).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public void 同种子同图换种子换图()
+    {
+        // §12 M2 验收「同种子同图」：地图字段全进世界哈希，所以第 0 回合的哈希就是地图指纹
+        Assert.Equal(Open(7).Hash().Total, Open(7).Hash().Total);
+        Assert.NotEqual(Open(7).Hash().Total, Open(8).Hash().Total);
+    }
+
+    [Fact]
+    public void 建图落在M2性能预算内()
+    {
+        // §12 M2 验收「32×20 生成 < 1s」。建图是 bootstrap，不在 15 步上（AI_HANDOFF 坑 7），
+        // 所以只能在开局这一步计；这里顺带钉住格数，防止有人把矩形悄悄改回别的形状。
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var sim = new Simulation(new SimConfig { Seed = 7 }).Bootstrap();
+        sw.Stop();
+
+        Assert.Equal(MapGen.MapColumns * MapGen.MapRows, sim.World.OfKind("hex").Count);
+        Assert.True(sw.ElapsedMilliseconds < 1000,
+            $"32×20 建图耗时 {sw.ElapsedMilliseconds} ms，§12 M2 判据是 < 1000 ms");
+    }
+
     // ================= 建城（§3.8 / §3.6 / §4.1）=================
 
     [Fact]
