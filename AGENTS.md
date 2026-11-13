@@ -19,7 +19,7 @@
 
 ## 2. 当前阶段
 
-**M1 Core、M2 地图、M3 公式二与守恒、M4 切片一/切片二（八阶级循环 + 状态机五档与罚则 + 多商品价格 + 解锁链 + 阶级转化 + 原料约束 + 200 年基线脱离死亡螺旋）均已完成并当场复验；M0 的 CI 工作流已补并改为 Windows-only，只差首次远端 Windows 全绿（Linux 按设计者 2026-11-13 的决定暂不验）。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
+**M1 Core、M2 地图、M3 公式二与守恒、M4 切片一/切片二（八阶级循环 + 状态机五档与罚则 + 多商品价格 + 解锁链 + 阶级转化 + 原料约束 + 200 年基线脱离死亡螺旋）均已完成并当场复验；M0 的 Windows CI 也已远端首跑全绿（GitHub run #2，2026-11-13，Linux 按设计者决定暂不验）。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
 
 - 能跑的东西：无头模拟器 `sim`（6 个动词 + `--layer` 五图层）、Godot 窗口壳（32×20 地图 + 点格建城 + 5 个图层 + headless 冒烟）。
   M2 的五层地块模型已落四层：地表、水体/河网、形胜（§3.4 十二种）、资源（§3.5 五种）；人造层随 M5 的建设与道路进。
@@ -161,9 +161,10 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
 
-1. **CI 尚待远端首验（Windows-only）**：GitCode 只识别 `.gitcode/workflows/ci.yml`（`build-test` + `sim-headless`），
-   `.github/workflows/ci.yml` 是给 GitHub 镜像用的同一套判据。本地复验不等于 CI 绿；
-   首跑全绿前 M0 仍标 🟡，不能打 `v0.0`。Linux 平台按设计者决定**暂不验**。命令与判据见 `TEST_PLAN.md` §6。
+1. **CI 已绿，但只覆盖 Windows**：GitHub 私有仓库镜像的 run #2（`f05f9b1`，2026-11-13）三个 job 全绿：
+   `build-test`（97 测试）、`sim-headless`（check/hash/replay/200y）、`godot-smoke`（`SMOKE PASS` 且
+   CLI 与 Godot 同为 `fc88ca36ce90fb37`）。Linux 按设计者决定**暂不验**。
+   GitCode 侧 `.gitcode/workflows/ci.yml` 受「代码化流水线内测名额」限制，尚未实际触发——别把 GitHub 的绿当成 GitCode 的绿。
 2. **两条接缝是「解析了但没人用」**：`SimConfig.YearLimit`（120/200 年不会自动结束）、
    `manifest.data_packs`（卡包开关还不生效）。**别误判成已生效**——前者归 M9，后者归 M8。
 3. **守恒等式**（§5.9 前三条）：**第一条已实现**（物资守恒 `basic.conservation`，第 10 步末校验，循环除 silver 外所有商品）；
@@ -178,17 +179,16 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 7. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
    本仓库已经有一次结论被旧 CSV 带偏。
 8. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
-9. **分支仍叫 `master`，CI 尚待远端首验**：当前已有 `origin` remote，但 Windows 工作流实际全绿前，
-   任何「CI 绿」的主张都没有证据基础。
-10. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 用整数定点与整数平方根，地图形状为 32×20 矩形，
-   `CoreInfo.MapGenVersion=6`（河网/水体/形胜/资源）；宿主 #1 上 CLI 与 Godot 4.7.2 smoke 同为 `fc88ca36ce90fb37`，
-   CI 首验要在 Windows 上复核同种子地图哈希。
+9. **分支仍叫 `master`**：remote `origin` 指向 GitCode、`github` 指向 GitHub 私有镜像；
+   改名 `main` 属 D-002 的第三步，尚未执行。
+10. **地图生成的跨 OS 结果**：`MapGen.cs` 用整数定点与整数平方根，地图形状为 32×20 矩形，
+   `CoreInfo.MapGenVersion=6`（河网/水体/形胜/资源）；宿主 #1、GitHub `windows-latest` 与 Godot 4.7.2 smoke
+   三处同为 `fc88ca36ce90fb37`。Linux 未验（用户决定），别把 Windows 的一致性外推成跨 OS 结论。
 
 ## 11. 下一项任务（按顺序，不跳队）
 
-1. **完成 CI 首验（Windows-only）**：推送后核对 `.github/workflows/ci.yml` 的三个 job 在 `windows-latest`
-   全部实际通过（Linux 暂不验，见 §10 第 1 条），把 Windows 首跑哈希写回 `BALANCE.md` / `CHANGELOG-DESIGN.md`；
-   本地等价复验不能替代这一步。
+1. ~~完成 CI 首验（Windows-only）~~ **已完成**：GitHub run #2（`f05f9b1`，2026-11-13）三 job 全绿，
+   证据在 `ROADMAP.md` §2.1；Linux 与 GitCode 内测流水线仍不在范围内。
 2. **重写根 [`Readme.md`](Readme.md)**：人类入口，一条命令 + 一张截图 + 指回本文件（需求原文已在 `REQUIREMENTS.md`）。
 3. **打 tag `v0.0` / `v0.1`，并把 `master` → `main`**（D-002 的三步；`develop` / `feature/*` 有理由地推迟）。
 4. **M2 已经收口，M3/M4 切片一/二也已并入**：形状、九类地表、河网水体、十二形胜、五种门槛资源与图层 4–5 全部落地，

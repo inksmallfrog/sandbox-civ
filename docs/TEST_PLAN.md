@@ -195,7 +195,9 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 | `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `fc88ca36ce90fb37`，并上传对账日志 |
 
 2026-11-13 在 Windows 宿主 #2 按上述步骤复验通过，两个 Godot 官方下载地址均返回 200。
-**远端首跑尚未执行，所以 M0 仍为 🟡，不能写成 CI 已绿。** CI 的 Windows 首跑哈希必须当场抄进
+**远端首跑已执行**：GitHub run #2（commit `f05f9b1`，2026-11-13，1m33s）三个 job 全绿，
+`godot-smoke` 的产物里 CLI 与 Godot 同为 `fc88ca36ce90fb37`，M0 因此可以标 ✅。
+GitCode 侧流水线仍受内测名额限制，未触发。CI 的 Windows 首跑哈希必须当场抄进
 `docs/BALANCE.md` §4 与 `CHANGELOG-DESIGN.md`，之后它就是基线。在此之前，
 「跨平台一致」是一个尚未验证的假设，不是已完成的事实。
 
