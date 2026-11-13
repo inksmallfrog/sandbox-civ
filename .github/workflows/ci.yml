@@ -1,8 +1,12 @@
 name: ci
 
 on:
+  # 只响应 main 的 push 与 PR：push tag 或推其他分支都不该白耗 Runner。
+  # 配合 AGENTS §8 的推送纪律——只有 M 级改动才推到 GitHub 取证。
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:

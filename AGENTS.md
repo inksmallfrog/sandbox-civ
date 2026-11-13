@@ -137,9 +137,15 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 - **分支**：`main`（可发布）/ `develop`（集成）/ `feature/*`（短命）（§11.2）。
   当前检出 `main`，同时跟踪 `origin/main`（GitCode）与 `github/main`（GitHub 镜像）；
   `master` 在远端仍存在，等两个平台都把默认分支切成 `main` 后再删（D-002）。
-- **tag**：§11.2 与 §12 对 `v0.2` 及以上给了**两套互斥的含义**（挂在 **D-001 待裁决**）。
-  重叠区间只有 `v0.0`（M0 骨架）与 `v0.1`（Core 可运行），两边一致——**只在这两个区间打 tag**，
-  裁决前不许打 `v0.2`。
+- **远端分工与推送纪律**：`origin`（GitCode）是**日常唯一推送目标**；`github`（GitHub 镜像）
+  **只在 M 级改动完成时推一次**，用来触发 Windows + Linux 双系统 CI 取证。
+  日常小改（文档、单条规则、某个 P0 子项、重构）只推 `origin`，**不推 `github`、也不主动查 CI 状态**——
+  频繁 push 会连续触发 GitHub Actions，白耗 Runner 配额。
+  「M 级」的判据：一个里程碑的验收项全部落地（例如 M4 的三个 P0 全部完成且本地复验通过）。
+  届时一次 `git push github main` 跑双系统 CI，结果抄回 `TEST_PLAN.md` §6。
+- **tag**：按 GDD v1.1 §12 的里程碑打（D-001 已裁决）：`v0.0` M0、`v0.1` M1、`v0.2` M2、
+  `v0.3` M3、`v0.4` M4 … §11.2 的功能名 tag 表已废除。tag 只在对应里程碑**验收通过后**打，
+  并与分支一起推两个远端；`v0.0`/`v0.1` 已打（`d4720f1` / `097ca4c`）。
 - **规则改动流程**（§11.3）：改数值 → 改 `data/*.json` → 跑基线 → 在
   [`docs/CHANGELOG-DESIGN.md`](docs/CHANGELOG-DESIGN.md) 记「改了什么 / 为什么 / **模拟差异**」→ 提交。
   改规则 → 先改 GDD（**只有设计者能改**，见下）→ 再改代码 → 附回归测试。破存档 → 必须附迁移器 + 旧档回归。
