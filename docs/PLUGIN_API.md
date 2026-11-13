@@ -56,12 +56,12 @@ GDD §10.3 的规划（20 个插件）到 M6 才会逐个出现；M1 只有 `cor
 
 ## 3. hook 点全表与落位
 
-`enum HookPoint` 共 21 个（`Count` 只是数组长度，不是点）。下面是 `sim check` 打出来的落位表
+`enum HookPoint` 共 22 个（`Count` 只是数组长度，不是点）。下面是 `sim check` 打出来的落位表
 （`pre` = 该步首，`post` = 该步末，`prepost` = 首尾同一个点、广播两次）：
 
 ```
 OnTurnStart → 01pre, 02pre
-OnActionValidate → 01post
+OnActionValidate → 不落在任何步骤（命令执行器内，逐条命令）
 OnProduction → 02post, 03prepost, 04prepost, 05prepost
 OnConsumption → 06post, 10prepost
 OnPriceForm → 06pre, 07pre, 08pre
@@ -81,18 +81,21 @@ OnTurnEnd → 15post
 OnBeforeSave → 不落在任何步骤（意图段 / 存档期 / 命令执行器内）
 OnLoad → 不落在任何步骤（意图段 / 存档期 / 命令执行器内）
 OnMigrate → 不落在任何步骤（意图段 / 存档期 / 命令执行器内）
+OnIntentEnd → 01post
 ```
 
-`OnEventApply / OnHeroRoll / OnAppointment / OnDemand` 这四个点与 `OnMigrate`
+`OnEventApply / OnHeroRoll / OnAppointment / OnDemand / OnActionValidate` 这五个点与 `OnMigrate`
 **不在结算表里**，不是「没用的点」：
 
 - `OnEventApply` 归 `events.core`——事件抽到之后由它自己 `ctx.Require`（M5 落地）；
 - `OnHeroRoll / OnAppointment / OnDemand` 归名人与 AI 系统，在**意图段的命令执行器内部**广播；
+- `OnActionValidate` 在 `ExecuteCommand` 里**逐条命令**广播（带 `command / issuer / arg.* / result`），
+  原先同时挂第 1 步 post 是语义重复，D-047 起只保留命令执行器内这一处；
 - `OnBeforeSave`（`Simulation.cs:436`）与 `OnLoad`（`:480`）已经由 Core 广播，
   参数里带 `schemaVersion`；`OnMigrate` 目前由 `MigratorChain` 直接调迁移器，**不走 hook**
   （第一条真接线在第一次破存档的迁移器上，见 `docs/SAVE_FORMAT.md`）。
 
-M1 没有任何插件调用这五个点，所以 `sim check` 的表里它们是空的。
+M1 没有任何插件调用这些点，所以 `sim check` 的表里它们是空的。
 
 广播时 `HookArgs` 里固定有（`Simulation.StepArgs`，`src/SimCore/Simulation.cs:399`）：
 

@@ -7,9 +7,9 @@ namespace SimCore;
 public static class CoreInfo
 {
     /// <summary>插件 manifest 的 <c>api</c> 字段必须与此同主版本，否则拒载。</summary>
-    public const string ApiVersion = "1.0";
+    public const string ApiVersion = "1.1";
     public const int ApiMajor = 1;
-    public const int ApiMinor = 0;
+    public const int ApiMinor = 1;
 
     /// <summary>存档结构版本。每次数据结构改动 +1，并必须附迁移器（§10.6）。</summary>
     public const int SchemaVersion = 1;

@@ -81,7 +81,7 @@ public static class SimOrder
     /// </summary>
     public static readonly IReadOnlyList<SimStep> Steps = new List<SimStep>
     {
-        new(1,  "apply_commands",  "应用已批准的命令与政策（扣 AP）", Season.Intent, HookPoint.OnTurnStart, HookPoint.OnActionValidate),
+        new(1,  "apply_commands",  "应用已批准的命令与政策（扣 AP）", Season.Intent, HookPoint.OnTurnStart, HookPoint.OnIntentEnd),
         new(2,  "buildings",       "建筑与设施生效/完工",             Season.Spring,  HookPoint.OnTurnStart, HookPoint.OnProduction),
         new(3,  "agriculture",     "农业产出（春播秋收的净效果）",     Season.Spring,  HookPoint.OnProduction, HookPoint.OnProduction, "agriculture"),
         new(4,  "industry",        "工业生产（含原料约束）",           Season.Spring,  HookPoint.OnProduction, HookPoint.OnProduction, "industry"),
@@ -110,7 +110,7 @@ public static class SimOrder
     /// </summary>
     public static string WhereHookLands(HookPoint p) => p switch
     {
-        HookPoint.OnActionValidate => "第 1 步（逐条命令）",
+        HookPoint.OnActionValidate => "不落在任何步骤（命令执行器内，逐条命令）",
         HookPoint.OnProduction => "第 2–5 步",
         HookPoint.OnPriceForm => "第 6–8 步",
         HookPoint.OnConsumption => "第 6、10 步",
@@ -122,6 +122,7 @@ public static class SimOrder
         HookPoint.OnHeroRoll or HookPoint.OnAppointment or HookPoint.OnDemand => "意图段（命令执行器内）",
         HookPoint.OnDiplomaticAction => "第 8、15 步",
         HookPoint.OnTurnStart => "第 1–2 步首",
+        HookPoint.OnIntentEnd => "第 1 步末",
         HookPoint.OnTurnEnd => "第 15 步末",
         HookPoint.OnBeforeSave => "写档前",
         HookPoint.OnLoad => "读档后",
@@ -166,7 +167,10 @@ public static class SimOrder
                 var hits = Steps.Where(s => s.Pre == p || s.Post == p)
                     .Select(s => $"{s.Index:D2}{(s.Pre == p ? "pre" : "")}{(s.Post == p ? "post" : "")}")
                     .ToList();
-                return $"{p} → {(hits.Count == 0 ? "不落在任何步骤（意图段 / 存档期 / 命令执行器内）" : string.Join(", ", hits))}";
+                string where = p == HookPoint.OnActionValidate
+                    ? "不落在任何步骤（命令执行器内，逐条命令）"
+                    : "不落在任何步骤（意图段 / 存档期 / 命令执行器内）";
+                return $"{p} → {(hits.Count == 0 ? where : string.Join(", ", hits))}";
             })
             .ToList();
 }

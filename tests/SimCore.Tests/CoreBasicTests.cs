@@ -1162,6 +1162,40 @@ public class CoreBasicTests
         Assert.True(town.GetInt(F.TownPop("class.peasant")) > 0, "转化必须给农民留人，否则没人种地");
     }
 
+    /// <summary>
+    /// §4.7 结构目标：已解锁阶级高于 <c>shareTarget</c> 时必须回流农民。
+    /// 只做单向流入的话，小人口时整数进位造成的超额会被 4%/年的人口增长永久锁住
+    /// （seed 7 的工人曾稳定在 22.5%，目标是 12%；见 D-046 的全阶级基线）。
+    /// </summary>
+    [Fact]
+    public void 高于shareTarget的阶级会回流农民()
+    {
+        var sim = OneTown(63, 40);
+        var town = Town(sim);
+        long total = sim.World.GetInt(town.Id, F.TownPopTotal, 0);
+        Assert.True(total >= 9, $"40 年只长到 {total} 个百人单位，样本太小");
+
+        // 直接把工人摆到远高于 12% 的位置（解锁链由另一条测试覆盖）
+        long pop = total / 3;
+        sim.World.WriteRaw(town.Id, F.TownPop("class.peasant"), SimValue.OfInt(total - pop));
+        sim.World.WriteRaw(town.Id, F.TownPop("class.worker"), SimValue.OfInt(pop));
+        sim.World.WriteRaw(town.Id, F.TownUnlocked("class.worker"), SimValue.True);
+
+        for (int t = 0; t < 40; t++) sim.AdvanceTurn();
+
+        town = Town(sim);
+        long worker = town.GetInt(F.TownPop("class.worker"));
+        long totalAfter = sim.World.GetInt(town.Id, F.TownPopTotal, 0);
+        // 末态看「占比是否回到结构目标 ±3%」，而不是看绝对人口：
+        // 总人口本身还在 4%/年 增长，目标份额会同步抬高。
+        Assert.True(worker * 100 <= totalAfter * 15,
+            $"工人占比 {worker}/{totalAfter} 仍高于结构目标 12% + 3%（起始 {pop}/{total}）");
+        long sum = 0;
+        foreach (var cls in sim.Data.OfType(F.TypeClass))
+            sum += sim.World.GetInt(town.Id, F.TownPop(cls.Id), 0);
+        Assert.Equal(sim.World.GetInt(town.Id, F.TownPopTotal, -1), sum);
+    }
+
     /// <summary>§4.3 原料约束：工人产器耗料 1.2/人/年，料为 0 时器产出必须是 0。</summary>
     [Fact]
     public void 工人没有料就产不出器()

@@ -54,7 +54,7 @@ src/Plugins/core.basic/ 参考规则包：10 个 .cs + manifest.json（M1–M4 �
 src/HexaCiv.Cli/       无头壳层（sim：Program / Runner / Script / AsciiMap）
 src/GodotShell/        窗口壳层（Main.cs / HexView.cs / Main.tscn / project.godot）
 data/                  _schema.json + core.basic/*.json（数值只住在这里）
-tests/SimCore.Tests/   xUnit，109 条
+tests/SimCore.Tests/   xUnit，111 条
 scripts/               demo.txt（命令脚本）、godot-smoke.txt（跨宿主对账脚本）
 analysis/out/          基线 CSV（gitignore，**是产物不是现状**）
 saves/                 回归样本档（.bin 被 ignore，只留 .gitkeep）
@@ -71,7 +71,7 @@ build/plugins/         core.basic.dll 的落点，宿主从这里装（gitignore
 1. **`manifest.id` 必须等于目录名**；`api` 主版本必须是 `1`；键名 **snake_case**，
    **不认识的键直接拒载**（不是静默忽略），`PropertyNameCaseInsensitive = false`，驼峰也算写错。
 2. **插件之间禁止直接调用**（GDD §10.4）。唯一的通信手段是 hook 点与共享世界状态。
-3. 只能挂在既定的 **21 个 hook 点**上；顺序不可调换、不可插队，`priority` 只定同一步内的顺序。
+3. 只能挂在既定的 **22 个 hook 点**上；顺序不可调换、不可插队，`priority` 只定同一步内的顺序。
 4. **Pre == Post 同名的 6 个步必须用门闸**：`SimOrder.At(args, stepId, SimOrder.SlotPre)`。
    只看 `SimOrder.InStep` 会在同一步跑两遍——这是加第二个插件后才暴露的坑（`PLUGIN_API.md` §4）。
 5. 主题级 hook 收到的是全局广播，**扇出点模式**（`FanOut` / `RequireFor`）负责按城镇逐个调用；
@@ -104,8 +104,8 @@ build/plugins/         core.basic.dll 的落点，宿主从这里装（gitignore
 
 ```bash
 dotnet build -v q --nologo                  # 必须 0 错误（警告 = 错误）
-dotnet test --nologo                        # 109 绿，0 跳过
-dotnet run --project src/HexaCiv.Cli -- check                      # 数据包 + 清单 + 15 步 + 21 落点全表
+dotnet test --nologo                        # 111 绿，0 跳过
+dotnet run --project src/HexaCiv.Cli -- check                      # 数据包 + 清单 + 15 步 + 22 落点全表
 dotnet run --project src/HexaCiv.Cli -- hash  --seed 99 --turns 50  # 确定性自检
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5 --turns 20 --at 12
 dotnet run --project src/HexaCiv.Cli -- run --no-plugins --no-data --turns 1000 --quiet   # Core 空跑
@@ -119,7 +119,8 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 | `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `4983eb54fb4de27a`，**且必须与 Godot 冒烟同值**（D-043 新增字段后重测） |
 | `… replay --seed 5 --turns 20 --at 12` | 快照往返 `6ef1f5877c6eed22`；续跑 = 一口气跑满 `5dbb715fcf6222b3` |
 | `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 109 / 最低满意 37.81 / hash `1cc5b6d0e0501c99`（D-045 重测；`c627c4d01388e426`、`4f3cad2796a670fa`、`73077833df98cffb` 均已作废） |
-| `… check` | `dataHash d3e94063673c797e`，15 步、21 落点（**7 个不落在任何步骤**） |
+| `… check` | `dataHash d3e94063673c797e`，15 步、22 落点（**8 个不落在任何步骤**） |
+| `… run --seed 42 --turns 200 --script scripts/classes.txt --headless` | 八阶级基线：末行 2 城 / 人口 116 / 最低满意 40.06 / hash `b28aafef05e0b4b7`（D-046；三种子见 `BALANCE.md` §4.1） |
 
 `dotnet test` 不覆盖跨宿主一致性：改过 `src/GodotShell/Main.cs` 的 `Smoke()` 参数，
 **必须同步改 `scripts/godot-smoke.txt`** 并跑上面两条对比（`TEST_PLAN.md` §3）。
@@ -162,7 +163,7 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 | SimCore | 九项职责全部实现（世界存储 / 15 步调度 / 分层 RNG / 数据注册 / 不变量 / 因果链 / 命令流 / 存档回放迁移 / 插件宿主）+ 同步层与分块哈希铺好接缝 | `AI_HANDOFF.md` §2.1、`ROADMAP.md` §2.2 |
 | core.basic | 32×20 矩形六边形图（§3.7 六步：高度/温度/降水/九类地表 + §3.1 水体 + §3.3 河网 + §3.4 十二形胜 + §3.5 五种门槛资源 + 骨架雕刻）+ 建国 → 建城 → 开荒/起仓 → **八阶级产出循环（公式一，含 §4.2 罚则与 §4.3 原料约束）** → **多商品价格（公式二，除 silver 外 4 种）** → 消耗 → 配给 → 满意度（公式三 + **状态机五档 + 分阶级反抗 + 暴动倒计时**）→ 人口增长（含 §4.7 拥挤）→ **解锁闸门（§4.4）与阶级转化（§4.7）** → 不安计数 → 年报；**三条公式已全部实装**；守恒等式（§5.9 第一条，循环所有商品）与价格区间不变量已注册 | `BALANCE.md` §1/§3/§4/§5 |
 | 壳层 | CLI 6 动词 + `--layer` 五图层；Godot 窗口（绘制 / 拾取 / 侧栏 / 年报 / 640 格全格拾取自检；河网、水体、形胜标记、资源与人口图层） | `ROADMAP.md` §2 |
-| 测试 | 109 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 47 / 形胜与资源 16 / 验收 14（含 D-042 配给 3 条、D-043 守恒 2 条、D-044 价格 4 条、D-045 公式三/解锁 3 条） | `TEST_PLAN.md` §2 |
+| 测试 | 111 条：定点 12 / RNG 10 / 顺序与数据 11 / 循环 48 / 形胜与资源 16 / 验收 14（含 D-042 配给 3 条、D-043 守恒 2 条、D-044 价格 4 条、D-045 公式三/解锁 3 条、D-046 回流 1 条、D-047 hook 1 条） | `TEST_PLAN.md` §2 |
 | 文档 | §11.1 要求的 13 份全部落地（GDD 之外 12 份 + REQUIREMENTS）+ 本文件 | `ROADMAP.md` §2.1 |
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
@@ -182,7 +183,8 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
    （住房容量 = 辖地自然粮潜力 ÷ 人均口粮，占位见 D-041）与 §4.2 的原值罚则，
    并改成按需求比例配给后，seed 42 的 200 年基线稳定在 2 城 / 人口 109 / 最低满意 37.81。
    旧结论「人口 117 / 最低满意 26–42」建立在配给顺序 bug 上，已作废（D-042）。
-   演示脚本仍是两阶级，八阶级的平衡点要等 `scripts/classes.txt` 重跑后才能下结论。
+   八阶级基线已在 D-046 跑通（`scripts/classes.txt`，seed 7/42/99），但三张图的两座城辖地都没有铁/马，
+   军人/文艺家解锁不了，实际只覆盖六阶级；根因是 §3.8 自动选址不感知 §3.5 资源（见 `BALANCE.md` §4.1）。
 7. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
    本仓库已经有一次结论被旧 CSV 带偏。
 8. **D-001 已裁决**：tag 一律按 GDD v1.1 §12 的里程碑（`v0.0` M0 … `v1.0` M11）；§11.2 的功能名 tag 表废除。
@@ -191,6 +193,10 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 10. **地图生成的跨 OS 结果**：`MapGen.cs` 用整数定点与整数平方根，地图形状为 32×20 矩形，
    `CoreInfo.MapGenVersion=6`（河网/水体/形胜/资源）；宿主 #1、GitHub `windows-latest` 与
    `ubuntu-latest`（run #6 的 `godot-smoke`）同为 `fc88ca36ce90fb37`，Linux 的 CLI 与 Godot 两侧都核对过。
+11. **迁移未实现 → M5b**（D-048）：GDD v1.1 §4.7 的过渡条款允许 M0–M4 只跑增长 + 转化；
+   迁移需要第 9 步工资作输入，现在实现只能拿 `shareTarget` 冒充吸引力（D-041 禁止）。欠账记在 `ROADMAP.md` §4。
+12. **§3.8 自动选址不看 §3.5 资源**：auto 选址只按粮潜力挑点，三张基线图的两座城辖地都没有铁/马，
+   导致兵营盖了也开不了军人、文艺家被硬前置挡住。修它要动选址规则（会改所有地图哈希），归 M5 前单独裁决。
 
 ## 11. 下一项任务（按顺序，不跳队）
 
@@ -203,10 +209,11 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 4. **M2 已经收口，M3/M4 切片一/二也已并入**：形状、九类地表、河网水体、十二形胜、五种门槛资源与图层 4–5 全部落地，
    证据在 [`docs/ROADMAP.md`](docs/ROADMAP.md) §2.3；三条公式、守恒第一条、解锁链与阶级转化已实装。
    **M2 验收的人工目检条**（同形胜在 20 张图里可认出）见 `analysis/out/m2-shapes.txt`。
-5. **M4 的 P0/P1 补丁已全部落地**（D-042 配给顺序 / D-043 全局守恒 / D-044 价格测试 / D-045 公式三税负矛盾+解锁链+minSat+3/4/5 步拆分）。
-   **下一步**按 `REVIEW-M0-M4.md` §8：`scripts/classes.txt` 全阶级基线（seed 7/42/99 × 200 年，更新 BALANCE §4 与 D-040 结论）、
-   hook 双播（`OnTurnEnd` 单次）、迁移决策；随后才是 M5a（工资/俸禄、税制、财富、需求受银约束）。
-   M4 切片一 `f0521a9`、切片二见 CHANGELOG-DESIGN **D-040**、P1 见 **D-045**。
+5. **进 M5 前的门禁已全部完成**：P0/P1（D-042–D-045）、全阶级基线 + 反向回流（D-046）、
+   hook 双播修复 + Core API 1.1（D-047）、迁移推迟落账（D-048）；`v0.2`/`v0.3`/`v0.4` 已按 §12 打在验收提交上。
+   **下一步是 M5a**：第 9 步工资/俸禄、第 11 步税制、阶级财富、需求受银约束、市场按支付能力排序；
+   M5a 验收通过前不做多镇贸易（范围与顺序见 `ROADMAP.md` §6）。
+   M4 切片一 `f0521a9`、切片二见 CHANGELOG-DESIGN **D-040**、P1 见 **D-045**、门禁见 **D-046–D-048**。
 
 ## 12. 不可违反的架构原则
 

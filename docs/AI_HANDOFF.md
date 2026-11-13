@@ -42,14 +42,15 @@
 | 项 | 值 | 复现 |
 |---|---|---|
 | 分支 | `master` 合并 `origin/master`（M3/M4 四个提交）后的工作树；尚未推送 | `git log --oneline --graph -8` |
-| 工作区 | 合并冲突只在三份文档；代码自动合并后 109 条测试全绿 | `git status --short` |
-| 测试 | **109 绿，0 跳过** | `dotnet test --nologo` |
+| 工作区 | 合并冲突只在三份文档；代码自动合并后 111 条测试全绿 | `git status --short` |
+| 测试 | **111 绿，0 跳过** | `dotnet test --nologo` |
 | 确定性自检 | `d5b046d92676eda2`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
 | 跨宿主末回合哈希 | `4983eb54fb4de27a`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值；`SMOKE PASS`，拾取 1920/1920 |
 | 快照往返 | `6ef1f5877c6eed22`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
 | 续跑等价 | `5dbb715fcf6222b3`（一口气跑满 = 存盘续跑） | 同上 |
 | 200 年基线 | seed 42 末态 `1cc5b6d0e0501c99`，`dataHash d3e94063673c797e`，2 城 / 人口 109 / 最低满意 37.81 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv`（D-045 后重测；更早的 `4f3cad2796a670fa` / `c627c4d01388e426` 已作废） |
 | 建图耗时 | 约 74 ms / 640 格（§12 M2 判据 < 1000 ms） | `sim map --seed 7` 的 `core.basic：建图 … ms` |
+| 八阶级基线 | seed 42 末态 `b28aafef05e0b4b7`，2 城 / 人口 116 / 最低满意 40.06（seed 7 `80553325eeace753`、seed 99 `9de744e95845ea1f`） | `sim run --seed 42 --turns 200 --script scripts/classes.txt --headless`（D-046；表在 `BALANCE.md` §4.1） |
 | 代码量 | SimCore 20 文件 / 3404 行 · core.basic 10 / 2820 · CLI+Godot 1562 · 测试 2155 | 排除 `bin/obj` 后统计 `.cs` 行 |
 
 **上面每一个数字都是这次会话里重跑出来的**，不是从旧文档抄的。改动作废它们不算违约，
@@ -83,7 +84,7 @@
 32×20 矩形六边形图（§3.7 六步：高度 / 温度 / 降水 / 九类地表 / 河网 / 形胜与资源；§3.9）→ 建国 → 建城（§3.8 距离闸门）→ 开荒 / 起仓 →
 **八阶级产出循环（公式一，含状态机罚则）** → **多商品价格（公式二，除 silver 外 4 种商品）** → 多阶级消费 → 配给 →
 满意度（公式三 + **状态机五档**）→ 人口（零头桶累积）→ 不安与反抗计数 → 年报。**三条公式全部实装**，
-21 个落点里挂了 13 个处理器（+`Pricing.Price`，M4 切片二加 `TownOps.Unlocks`），3 条命令，**4 组不变量**（+price_bounds + conservation + class_monotonic），5 个图层。
+21 个落点里挂了 13 个处理器（+`Pricing.Price`，M4 切片二加 `TownOps.Unlocks`），3 条命令，**4 组不变量**（+price_bounds + conservation + class_monotonic），5 个图层；D-047 后落点为 22 个，`OnActionValidate` 移出步骤表。
 逐条常数与解析解在 `BALANCE.md` §1/§3/§5。
 **缺口**：税制（罢工的抗税 −50% 只有产出罚则）、多商品建筑造价（§4.8 的料/器/银）、
 阶级吸引力的真式与住房容量定义（D-041）、价格不影响消费分配逻辑
@@ -189,8 +190,8 @@ D-036 再把十二形胜与五种门槛资源接进 §3.6 的乘法链，并主�
 原因：`OnProduction` 一类落点在同一步的首尾各广播一次，`InStep` 只看步不看段（`Time.cs:154`，它的注释就地写着「会跑两遍」）。
 处置：`SimOrder.At(args, stepId, SimOrder.SlotPre)`；全表在 `SIM_ORDER.md` §3，门闸写法在 `PLUGIN_API.md` §4。
 
-**坑 7 — 21 个落点里有 7 个不落在 15 步上。**
-`OnEventApply / OnHeroRoll / OnAppointment / OnDemand / OnBeforeSave / OnLoad / OnMigrate`
+**坑 7 — 22 个落点里有 8 个不落在 15 步上。**
+`OnEventApply / OnHeroRoll / OnAppointment / OnDemand / OnActionValidate / OnBeforeSave / OnLoad / OnMigrate`
 住在意图段、存档期、命令执行器里。症状：拿 `sim run --steps` 的分步耗时表去找 `map.gen`，找不到——
 地图生成是 `RegisterBootstrap`，跑在 `Bootstrap()`，不在 15 步的任何一步上。
 要测 §12 的「32×20 生成 < 1 s」得先给 `sim map` 加一行 bootstrap 计时（`ROADMAP.md` §3 末）。
@@ -279,8 +280,8 @@ MapGenVersion=6 已在宿主 #1 用 Godot 4.7.2 复验 CLI/Godot 同哈希（`fc
 单镇平衡点落在「粮安 0.5 ⇒ S≈29」，正好压在怠工线上；旧罚则（怠工 −50%、罢工 −100%）一旦触发就把产出打到 0，
 人口从 ~150 一路坍缩到个位数（旧基线 `pop=6`，`origin/master` 的 CSV 是 `pop=7`）。
 D-040 做了三件事：罚则改回 §4.2 原值（0.85 / 0.60）、反抗按阶级计数并「连续 2 年升一级」、
-补上 §4.7 的拥挤项（住房容量是占位，见 D-041）。修后 seed 42 的 200 年稳定在 2 城 / 人口 ≈117 /
-最低满意 30–42，不再坍缩。**遗留**：最低满意仍会在 26–30 附近波动，这是「地不够养这么多人」的
+补上 §4.7 的拥挤项（住房容量是占位，见 D-041）。修后 seed 42 的 200 年稳定在 2 城 / 人口 109 /
+最低满意 37.81（八阶级基线 116–129 / 38–42，见 D-046），不再坍缩。**遗留**：最低满意仍会在 36–42 附近波动，这是「地不够养这么多人」的
 有界坏均衡，不是螺旋；要更健康的平衡需要 M5 的工资/贸易或更细的住房数据。
 在它修掉之前，**200 年基线的 pop 列不能当作「经济健康」的判据**，只能当作确定性对账用的哈希锚点。
 
@@ -299,19 +300,32 @@ GitHub run #1 的 `godot-smoke` 就是这么红的（日志里先出现 `4.7.2.s
 并用 `Start-Process -Wait -PassThru -RedirectStandardOutput` 判退出码 + 校验版本字符串；
 后面 `--headless` 也必须指向 console 版，否则 bash 的 `2>&1 | tee` 抓不到任何输出。
 
+**坑 25 — `shareTarget` 只做单向转化会把超额焊死（D-046）。** 小人口阶段整数进位会让工人一次多转 1 个百人单位
+（13 人时 1 人就是 7.7%），而「目标份额 × 总人口」自己按 4%/年涨，永远追不上已有的超额；
+第一次跑 `classes.txt` 时 seed 7 工人稳定在 22.5%（目标 12%）。修法是 `Convert` 增加反向回流（同样 ≤ 总人口 2%/年）。
+以后调整 `shareTarget` 或人口增长率，都要重跑 §4.1 的三种子表，不能只看两阶级 demo。
+
+**坑 26 — hook 双播不会在 M4 爆，但会在 M5 爆（D-047）。** `OnTurnEnd` 原来在第 15 步 post 和结算后各广播一次；
+现在只播 15post。新增挂在 `OnTurnEnd` 的处理器**不要**再假设 args 里 `stepId` 为空——它现在带 `stepId=turn_end`。
+`OnActionValidate` 只在 `ExecuteCommand` 里逐条命令广播，别去 `SimOrder` 里找它的 post 落位。
+
+**坑 27 — 全阶级基线只跑到六阶级，不是脚本写错。** 三张基线图的两座城辖地都没有铁/马，
+兵营盖了也解锁不了军人，文艺家被「前一阶级已解锁」硬前置挡住。根因是 §3.8 自动选址不感知 §3.5 资源；
+改选址会改所有地图哈希，必须在 M5 前单独裁决，别顺手改。
+
 ---
 
 ## 6. 收工前复验（六条，跑完把新值写回 §1）
 
 ```bash
 dotnet build -v q --nologo                          # 0 错误（warning = error，坑 9）
-dotnet test --nologo                                # 109 绿
+dotnet test --nologo                                # 111 绿
 dotnet build src/GodotShell/HexaCiv.GodotShell.csproj # GodotShell 不在 solution，单独编译以免加载旧 DLL
 dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
 dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12
 godot --headless --path src/GodotShell -- --smoke # 需 Godot .NET 4.7.2 与 .NET SDK；若不在 PATH，按 DEV_ENVIRONMENTS.md 调用
 ```
 
-`sim check` 顺手跑一下：它同时校验数据包、清单、15 步表与 21 个落点表，是「文档与实现有没有分叉」的最快探针。
+`sim check` 顺手跑一下：它同时校验数据包、清单、15 步表与 22 个落点表，是「文档与实现有没有分叉」的最快探针。
 
 §11.4 收工三件事：更新本文件 → 提交 → 打 tag（`v0.0` 的门槛是 CI 三 job 在远端 Windows 实际全绿，不是工作流文件已经存在）。

@@ -363,7 +363,9 @@ public sealed partial class Simulation
         }
 
         Time.Season = Season.Winter;
-        Hooks.Dispatch(HookPoint.OnTurnEnd, new HookArgs { Subject = World.GlobalId }, new StepContext(this, 0, allowRegister: false));
+        // OnTurnEnd 只由第 15 步的 post 广播一次。这里不再补发——
+        // 旧实现在结算循环后以 step=0 又广播一遍，任何挂在 OnTurnEnd 的处理器都会一年跑两次
+        // （REVIEW-M0-M4 §7）。收尾逻辑要么幂等、要么挂到步骤表里，不能靠「多播一次」兜底。
 
         var hash = StateHash.Compute(World, Commands, Rng);
         Transport.BroadcastHash(Time.Turn, hash);

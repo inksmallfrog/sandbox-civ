@@ -1,0 +1,41 @@
+# 群邦纪元 HexaCiv · 八阶级基线脚本（REVIEW-M0-M4 §8 第 4 条）
+#
+# 目的：把 §4.4 的六种解锁建筑（作坊/市场/神庙/城镇中心/学宫/兵营/剧院）在建城后陆续盖齐，
+# 让八个阶级真的出现，再用 seed 7/42/99 × 200 年看阶级占比是否越 shareTarget ±3%。
+#
+# 与 demo.txt 一样全部写 auto / 显式 id，不依赖具体种子：
+#   town.0000 = 初城（承担全部解锁建筑）
+#   town.0001 = 分城（第 10 年建，满足商人「至少 2 座城」的 M4 代理条件）
+#
+# 回合安排的理由：
+#   作坊 requiresPop 6  → 第 14 年（4 个百人单位 × 1.04^12 ≈ 6）
+#   城镇中心 requiresPop 8 → 第 24 年（留出歉收年份的余量）
+#   剧院 requiresPop 20 → 第 55 年（第 43 年两镇合计约 31 个百人单位；55 年过 20）
+#   其余建筑只受存粮约束，错开年份，避免同一年把仓底扣空。
+#   注意：第 70 年才建剧院会被驳回——那时初城的存粮已经被新增阶级吃到 0（见 D-046 的模拟差异）。
+
+1  nation.found       name=魏                       reason=开局
+2  town.found         hex=auto nation=auto name=初城 reason=第一座城
+
+# 先摊田：没有地力，后面 52 石粮的建筑费攒不出来
+3  building.build     town=auto building=def:building.farm hex=auto reason=开荒
+5  building.build     town=auto building=def:building.farm hex=auto reason=继续摊田
+7  building.build     town=auto building=def:building.farm hex=auto reason=第三块田
+9  building.build     town=auto building=def:building.granary          reason=起粮仓压损耗
+
+# 第二座城：商人的 unlockTowns=2
+10 town.found         hex=auto nation=auto name=分城 reason=分城（商人解锁条件）
+12 building.build     town=town.0001 building=def:building.farm hex=auto reason=分城开荒
+
+# §4.4 解锁链：工人 → 商人 → 祭司 → 官僚 → 学者 → 军人 → 文艺家
+14 building.build     town=town.0000 building=def:building.workshop   reason=作坊（工人）
+16 building.build     town=town.0000 building=def:building.market     reason=市场（商人）
+18 building.build     town=town.0000 building=def:building.temple     reason=神庙（祭司）
+24 building.build     town=town.0000 building=def:building.towncenter reason=城镇中心（官僚）
+26 building.build     town=town.0000 building=def:building.academy    reason=学宫（学者）
+28 building.build     town=town.0000 building=def:building.barracks   reason=兵营（军人，需铁/马）
+
+# 剧院：文艺家要人口 20 + 存粮 30
+55 building.build     town=town.0000 building=def:building.theater    reason=剧院（文艺家）
+
+# 之后什么都不做：让阶级转化按 shareTarget 自己走满 130 年

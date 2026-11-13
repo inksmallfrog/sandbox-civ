@@ -15,7 +15,7 @@
 
 ## 1. 一句话规则
 
-**顺序不可调换，插件不可插队。** 插件只能在既定的 21 个 hook 点上挂处理器，
+**顺序不可调换，插件不可插队。** 插件只能在既定的 22 个 hook 点上挂处理器，
 点的落位由 Core 决定；同一个点在同一步的首尾各广播一次，靠 `slot` 参数区分。
 
 为什么这么硬：结算是一个**有向无环的因果链**。生产 → 分配 → 消费 → 满意度 → 人口 →
@@ -28,7 +28,7 @@
 ## 2. 十五步（`sim check` 的 `SimOrder.Describe()` 输出）
 
 ```
-01 应用已批准的命令与政策（扣 AP） | Intent | pre=OnTurnStart | post=OnActionValidate | layer=—
+01 应用已批准的命令与政策（扣 AP） | Intent | pre=OnTurnStart | post=OnIntentEnd | layer=—
 02 建筑与设施生效/完工 | Spring | pre=OnTurnStart | post=OnProduction | layer=—
 03 农业产出（春播秋收的净效果） | Spring | pre=OnProduction | post=OnProduction | layer=agriculture
 04 工业生产（含原料约束） | Spring | pre=OnProduction | post=OnProduction | layer=industry
@@ -61,7 +61,7 @@
 
 ```
 OnTurnStart → 01pre, 02pre
-OnActionValidate → 01post
+OnActionValidate → 不落在任何步骤（命令执行器内，逐条命令）
 OnProduction → 02post, 03prepost, 04prepost, 05prepost
 OnConsumption → 06post, 10prepost
 OnPriceForm → 06pre, 07pre, 08pre
@@ -81,6 +81,7 @@ OnTurnEnd → 15post
 OnBeforeSave → 不落在任何步骤（意图段 / 存档期 / 命令执行器内）
 OnLoad → 不落在任何步骤（意图段 / 存档期 / 命令执行器内）
 OnMigrate → 不落在任何步骤（意图段 / 存档期 / 命令执行器内）
+OnIntentEnd → 01post
 ```
 
 `prepost` = 这一步的 `Pre` 与 `Post` 是同一个点，广播两次。共六步会这样
@@ -114,10 +115,9 @@ SimOrder.InStep(args, "agriculture")                 // 某步首或尾（首尾
 SimOrder.PointsOf(stepIndex)                         // (Pre, Post)：Core 内部与自检用
 ```
 
-`OnTurnEnd` 之后还有一次**步骤外**广播：第 15 步的 `Post` 就是 `OnTurnEnd`，
-Core 另在结算结束后以 `step=0` 再广播一次 `OnTurnEnd`
-（`Simulation.cs:366`）。`core.basic` 的 `Nations.AdoptCapital` 挂在 `step=0` 那一次上，
-所以它必须**幂等**——看 `args.GetStr("stepId")` 是否为空。
+`OnTurnEnd` **只广播一次**：第 15 步的 `Post` 就是它（`Simulation.cs:356`）。
+D-047 删掉了结算结束后那次 `step=0` 的补发——旧实现让挂在 `OnTurnEnd` 的处理器一年跑两遍。
+`core.basic` 的 `Nations.AdoptCapital` 因此也只跑一次，不再依赖幂等。
 
 ---
 
@@ -132,10 +132,10 @@ for 每一步（1→15）:
     Season = step.Season
     ctx = new StepContext(step.Index)                 // Step=-1 才禁止写入，见第 7 节
     Hooks.Dispatch(step.Pre,  args(slot=pre))
-    if step.Index == 1: 逐条 ExecuteCommand(cmd)      // OnActionValidate → 执行器 → CommandResult
+    if step.Index == 1: 逐条 ExecuteCommand(cmd)      // OnActionValidate（逐条）→ 执行器 → CommandResult
     Hooks.Dispatch(step.Post, args(slot=post))
     Invariants.RunAfter(step.Index)                   // 违反且 FatalInvariants=true → 当场抛
-结算后： OnTurnEnd(step=0) → StateHash.Compute → Transport.BroadcastHash
+结算后： StateHash.Compute → Transport.BroadcastHash
           → 从 world.0000 的 report.* 攒出 Headline → TurnReport
           → Rng.ResetNamespaceStreams()               // §8.3：命名空间流不跨回合
 ```
@@ -158,7 +158,7 @@ for 每一步（1→15）:
 | 12 首 | 扇出点 → `SeasonRules.Satisfaction` | `OnSatisfaction` slot=pre | 同上 |
 | 13 首 | 扇出点 → `SeasonRules.Demography` | `OnClassTransition` slot=pre | 同上 |
 | 15 首 | `SeasonRules.Report` | `OnEventDraw` slot=pre | `Require`（写 `report.*`） |
-| 15 末 / step0 | `Nations.AdoptCapital` | `OnTurnEnd` | `Require`（幂等） |
+| 15 末 | `Nations.AdoptCapital` | `OnTurnEnd` | `Require` |
 | 2/3/10/12/13 末 | `basic.ranges` | 不变量 | `RegisterInvariant` |
 | 15 末 | `core.has_reason` / `core.no_empty_field` / `core.hash_stable` | 不变量 | Core 自带 |
 

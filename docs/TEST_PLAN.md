@@ -2,7 +2,7 @@
 
 > 规范来源：GDD §10.8（七类测试与「每里程碑附一份基线报告」）、§12（里程碑验收）、
 > §5.9（不变量）、§10.7（确定性）、§14（风险表的触发阈值）。
-> 实现：`tests/SimCore.Tests/`（109 条，2155 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
+> 实现：`tests/SimCore.Tests/`（111 条，约 2200 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```bash
 dotnet build                # TreatWarningsAsErrors：警告就是错误
-dotnet test                 # 109 条
+dotnet test                 # 111 条
 dotnet run --project src/HexaCiv.Cli -- check                    # 数据包 + 插件清单
 dotnet run --project src/HexaCiv.Cli -- hash   --seed 99 --turns 50
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5  --turns 20 --at 12
@@ -41,9 +41,9 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 
 ---
 
-## 2. 109 条的分层清单
+## 2. 111 条的分层清单
 
-> 下列条数按测试类粗分（`Theory` 的多组样本只计一次），因此与 `dotnet test` 的 109 条不必逐一对齐；
+> 下列条数按测试类粗分（`Theory` 的多组样本只计一次），因此与 `dotnet test` 的 111 条不必逐一对齐；
 > 判据以命令输出为准。
 
 ### `FixTests.cs`（12 条）· 定点数本体
@@ -66,10 +66,11 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 `回合边界重置命名空间流缓存` 是 §8.3 纪律 1（命名空间必须自带回合号）的执法者：
 任何规则想「依赖上一回合的流状态」，它立刻红。
 
-### `OrderAndDataTests.cs`（10 条）· 内核契约
+### `OrderAndDataTests.cs`（11 条）· 内核契约
 
 结算表 = GDD 那张表（15 步的 id/标题/季节/hook 逐条比）· 四季分布与意图段 ·
-**首尾同名的步必须靠 slot 区分** · 每个 hook 点都说得出落在哪（21 个点）·
+**首尾同名的步必须靠 slot 区分** · 每个 hook 点都说得出落在哪（22 个点）·
+**收尾与校验hook各只广播一次**（D-047：`OnTurnEnd` 只 15post、`OnActionValidate` 不落步骤）·
 合法数据包按 id 序数返回且哈希稳定 · 严格模式拒收坏数据 · 清单有问题就拒载 ·
 依赖决定装载顺序且禁止成环 · **清单键名拼错就拒载而不是静默落回默认值** · 仓库里真的装着 core.basic。
 
@@ -77,7 +78,7 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 `System.Text.Json` 一声不响地落回默认值 0——优先级、数据包开关这类字段静默失效，
 比崩溃难查一个数量级。现在未知键（`@` 前缀的注释键除外）直接拒载。
 
-### `CoreBasicTests.cs`（45 条）· 规则语义
+### `CoreBasicTests.cs`（46 条）· 规则语义
 
 **地图是32乘20且id与轴坐标互证** · **同种子同图换种子换图** ·
 **地表是GDD九类且每格都命中自己的气候区间** · **温度随纬度升高且九类地表都能长出来** ·
@@ -90,10 +91,11 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 丰年人口靠零头攒着往上涨 · **缺粮时零头桶照样落账而不是被截成零** · 灾年先断粮再减员最后反抗 ·
 满意度向S星收敛且只吃口粮一项 · 国势栏是各城的合计而不是又扫一遍世界。
 
-M3/M4 新增 11 条：粮价初始化且五回合内保持在区间内 · 多种子二十回合粮价始终在区间内 ·
+M3/M4 新增 12 条：粮价初始化且五回合内保持在区间内 · 多种子二十回合粮价始终在区间内 ·
 三十回合守恒不变量不触发 · 灾年粮价涨丰年粮价跌 · 八阶级循环五回合不崩 ·
 满意度跌破三十满六年升到暴动档 · 怠工状态下产出打八五折 · 罢工状态下产出打六折 · 四种商品价格都在区间内 ·
-**建作坊后工人解锁并从农民转出**（§4.4 + §4.7）· **工人没有料就产不出器**（§4.3 原料约束）。
+**建作坊后工人解锁并从农民转出**（§4.4 + §4.7）· **工人没有料就产不出器**（§4.3 原料约束）·
+**高于shareTarget的阶级会回流农民**（§4.7 结构目标，D-046）。
 
 这批里最要紧的设计是 `产出等于公式一的两个上限取小` 与 `满意度向S星收敛且只吃口粮一项`：
 它们在测试里把 GDD 的公式**重新算了一遍**。实现与文档各写一次、结果必须撞在一起，

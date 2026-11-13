@@ -565,29 +565,49 @@ public static class SeasonRules
 
             long pop = ctx.GetInt(town, F.TownPop(cid));
             Fix target = Fix.Mul(Fix.FromInt(total), share);
-            Fix deficit = target - Fix.FromInt(pop);
-            if (deficit <= Fix.Zero) continue;
+            Fix diff = target - Fix.FromInt(pop);
+            if (diff.IsZero) continue;
 
-            Fix want = Fix.Min(deficit, capPerClass);
+            // 高于结构目标时反向回流农民（同样受「单阶级 ≤ 总人口 2%/年」约束）。
+            // 只做单向流入的话，小人口时整数进位造成的超额会被 4%/年的人口增长永久锁住
+            // （seed 7 的工人曾稳定在 22.5%，目标是 12%，见 D-046 的全阶级基线）。
+            Fix want = diff > Fix.Zero
+                ? Fix.Min(diff, capPerClass)
+                : -Fix.Min(-diff, capPerClass);
             ctx.AddFix(town, F.TownConvert(cid), want,
-                $"§4.7 转化：{cls.GetStr("title")}目标 {target.Text}，现 {pop}，本年最多转 {want.Text}（零头入桶）");
+                diff > Fix.Zero
+                    ? $"§4.7 转化：{cls.GetStr("title")}目标 {target.Text}，现 {pop}，本年最多转 {want.Text}（零头入桶）"
+                    : $"§4.7 回流：{cls.GetStr("title")}目标 {target.Text}，现 {pop}，本年最多回流 {(-want).Text}（零头入桶）");
 
             Fix carry = ctx.GetFix(town, F.TownConvert(cid), Fix.Zero);
             long heads = carry.Raw / Fix.Scale;
-            if (heads <= 0) continue;
+            if (heads > 0)
+            {
+                long movable = Math.Max(0, peasant - 1);   // 农民至少留 1 个百人单位，否则没人种地
+                if (movable <= 0) continue;
+                if (heads > movable) heads = movable;      // 剩下的零头留在桶里等明年
 
-            long movable = Math.Max(0, peasant - 1);   // 农民至少留 1 个百人单位，否则没人种地
-            if (movable <= 0) continue;
-            if (heads > movable) heads = movable;      // 剩下的零头留在桶里等明年
+                ctx.AddFix(town, F.TownConvert(cid), -Fix.FromInt(heads), "转化零头结算：出人后扣掉整数部分");
+                ctx.AddInt(town, F.TownPop("class.peasant"), -heads,
+                    $"§4.7 阶级转化：{heads} 个百人单位离开农民（目标份额 {share.Text}）");
+                ctx.AddInt(town, F.TownPop(cid), heads,
+                    $"§4.7 阶级转化：{cls.GetStr("title")} +{heads} 个百人单位");
+                peasant -= heads;
 
-            ctx.AddFix(town, F.TownConvert(cid), -Fix.FromInt(heads), "转化零头结算：出人后扣掉整数部分");
-            ctx.AddInt(town, F.TownPop("class.peasant"), -heads,
-                $"§4.7 阶级转化：{heads} 个百人单位离开农民（目标份额 {share.Text}）");
-            ctx.AddInt(town, F.TownPop(cid), heads,
-                $"§4.7 阶级转化：{cls.GetStr("title")} +{heads} 个百人单位");
-            peasant -= heads;
+                ctx.Note($"{ctx.GetStr(town, F.TownName)}：{heads * 100} 人转为{cls.GetStr("title")}（§4.7 转化，目标份额 {share.Text}）");
+            }
+            else if (heads < 0)
+            {
+                long back = Math.Min(-heads, pop);
+                if (back <= 0) continue;
 
-            ctx.Note($"{ctx.GetStr(town, F.TownName)}：{heads * 100} 人转为{cls.GetStr("title")}（§4.7 转化，目标份额 {share.Text}）");
+                ctx.AddFix(town, F.TownConvert(cid), Fix.FromInt(back), "回流零头结算：出人后扣掉整数部分");
+                ctx.AddInt(town, F.TownPop(cid), -back,
+                    $"§4.7 阶级回流：{cls.GetStr("title")} 高于结构目标，{back} 个百人单位回到农民");
+                ctx.AddInt(town, F.TownPop("class.peasant"), back,
+                    $"§4.7 阶级回流：{back} 个百人单位回到农民（目标份额 {share.Text}）");
+                peasant += back;
+            }
         }
     }
 

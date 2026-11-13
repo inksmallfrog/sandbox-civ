@@ -37,8 +37,15 @@ public enum HookPoint
     OnLoad = 19,
     OnMigrate = 20,
 
+    /// <summary>
+    /// 第 1 步末（意图段结束）：命令已逐条校验并执行完，作为「意图段收尾」广播一次。
+    /// 与 <see cref="OnActionValidate"/> 分开，是因为后者是逐条命令的校验点（命令执行器内），
+    /// 不是全局步骤事件（REVIEW-M0-M4 §7 的 hook 双播修复）。
+    /// </summary>
+    OnIntentEnd = 21,
+
     /// <summary>数量，供数组分配。</summary>
-    Count = 21,
+    Count = 22,
 }
 
 /// <summary>hook 参数的具名槽位（字符串键，插件自订；Core 不解释含义）。</summary>

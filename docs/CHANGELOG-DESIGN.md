@@ -688,6 +688,66 @@
   `TEST_PLAN.md` 的期望值同步。**未做**（仍欠）：税制真值（M5a）、矛盾指数的六组结构项与财富落差（M5b）、
   城际迁移（M5）、分产业 `Facility_c`（M5a）。
 
+### D-046 全阶级基线（`scripts/classes.txt`）+ 阶级转化反向回流
+
+- 日期：2026-11-13 / 类型：数值 + 规则 / 状态：**已实现**
+- 改了什么：
+  1. 新增 `scripts/classes.txt`：建城后依次盖作坊（14 年）、市场（16）、神庙（18）、城镇中心（24）、
+     学宫（26）、兵营（28）、剧院（55），把 §4.4 的解锁链一路打开；
+     第二座城在第 10 年建，满足商人 `unlockTowns=2` 的 M4 代理条件。
+  2. `SeasonRules.Convert` 增加**反向回流**：已解锁阶级高于 `shareTarget × 总人口` 时，
+     按同样的「单阶级 ≤ 总人口 2%/年」上限把多余的人送回农民池。
+     原因见下：只做单向流入时，小人口阶段的整数进位会把超额永久锁住。
+- 为什么（REVIEW-M0-M4 §8 第 4 条）：没有全阶级基线，就无法验证「200 年阶级占比不越 `shareTarget±3%`」。
+  第一次跑 `classes.txt` 时 seed 7 的初城工人 16/71 = 22.5%（目标 12%），
+  且不随年份回落——因为 `目标份额 × 总人口` 自己也按 4%/年涨，单向转化永远追不上已有的超额。
+  这不是标定问题，是「结构目标」缺少向下调整的自由度。
+- 模拟差异（当场复验，2026-11-13）：
+
+  | 命令 | 旧值 | 新值 |
+  |---|---|---|
+  | `run --seed 7 --turns 200 --script scripts/classes.txt` | 无（脚本不存在） | `80553325eeace753`（2 城 / 129 / minSat 38.85） |
+  | `run --seed 42 --turns 200 --script scripts/classes.txt` | 无 | `b28aafef05e0b4b7`（2 城 / 116 / minSat 40.06） |
+  | `run --seed 99 --turns 200 --script scripts/classes.txt` | 无 | `9de744e95845ea1f`（2 城 / 117 / minSat 42.00） |
+  | 两阶级基线（`demo.txt`，seed 7/6、99/50、replay、42/200） | `4983eb54fb4de27a` / `d5b046d92676eda2` / `6ef1f5877c6eed22`·`5dbb715fcf6222b3` / `1cc5b6d0e0501c99` | **全部不变** |
+  | `dotnet test` | 109 | 111（本批 D-046 回流 + D-047 hook 各 1 条） |
+
+- 影响：已解锁六支的占比全部回到 `shareTarget ±3%`（表见 `BALANCE.md` §4.1）。
+  **已知缺口**：三张图的两座城辖地都没有铁/马，军人解锁不了，文艺家被硬前置挡住——
+  八阶级基线实际覆盖六阶级，根因是「§3.8 自动选址不感知 §3.5 资源」，归 M5 前处理。
+  D-040 留下的「八阶级平衡点等 `classes.txt` 重跑才能下结论」到此结清，旧结论（人口 117 / minSat 26–42）作废。
+
+### D-047 hook 双播修复：`OnTurnEnd` 单次 + `OnActionValidate` 移出步骤表
+
+- 日期：2026-11-13 / 类型：结构 / 状态：**已实现**（Core API 1.0 → 1.1，加 hook 点 = minor）
+- 改了什么：
+  1. **`OnTurnEnd` 只播一次**：删掉 `Simulation.AdvanceTurn` 在 15 步循环后补发的 `step=0` 广播。
+     它原意是「结算收尾」，但第 15 步的 post 已经是 `OnTurnEnd`，任何挂这里的处理器一年跑两遍。
+  2. **`OnActionValidate` 移出步骤表**：第 1 步的 post 改成新点 `HookPoint.OnIntentEnd`（意图段收尾）。
+     `OnActionValidate` 本来就在 `ExecuteCommand` 里逐条命令广播（带 `command/issuer/arg.*/result`），
+     把它同时当步骤事件是语义重复；`WhereHookLands` 现在如实写「命令执行器内（逐条命令）」。
+  3. `CoreInfo.ApiVersion` 1.0 → 1.1（`ApiMinor` 1），`CORE_API.md` / `PLUGIN_API.md` / `SIM_ORDER.md` 同步。
+- 为什么（REVIEW-M0-M4 §7）：`OnTurnEnd` 双播会让 M5 的税收/年报类处理器一年结算两次；
+  `OnActionValidate` 的 step-post 广播会让「校验」看起来在命令执行之后发生。
+  两者都是「测试还没覆盖到」的静默错误，等 M5 加税才爆就太晚。
+- 模拟差异：**零**。删掉的第二次 `OnTurnEnd` 只重复触发了幂等的 `Nations.AdoptCapital`，
+  世界状态不变：两阶级基线四组哈希全部原值（`4983eb54fb4de27a` / `d5b046d92676eda2` /
+  `6ef1f5877c6eed22`·`5dbb715fcf6222b3` / `1cc5b6d0e0501c99`）。`dotnet test` 109 → 111（与本批 D-046 同时提交）。
+- 影响：hook 点 21 → 22（`OnIntentEnd` 落在 01post；`OnActionValidate` 变成「不落在任何步骤」）。
+  插件 manifest 的 `api` 仍写 `1.0` 可正常装载（主版本一致），新点只增不改。
+
+### D-048 城际迁移推迟到 M5b（记录，不改代码）
+
+- 日期：2026-11-13 / 类型：结构 / 状态：**已记录**
+- 依据：GDD v1.1 §4.7 的过渡条款原文——「M0–M4 没有银流与工资，允许只跑增长 + 转化，迁移留空；
+  但必须把『迁移未实现』写进欠账表，且 M5a 一接工资就要补上」。
+- 决定：**不实现最小迁移**，按 GDD 的过渡条款推迟到 M5b；迁移公式
+  `(实发工资 − 物价) + (满意度 − 50)/5 − 通行成本` 需要第 9 步的工资（M5a）才有输入，
+  现在实现只能拿 `shareTarget` 冒充吸引力，正是 D-041 明确禁止的做法。
+- 落账：`ROADMAP.md` §4 与 `AI_HANDOFF.md` §5 的欠账表各加一条「迁移未实现 → M5b」，
+  `SIM_ORDER.md` 第 13 步维持「转化已实现、迁移空」的现状描述。
+- 影响：零代码、零哈希。M5b 的验收必须包含「迁移前后全局人口不变」这条守恒（§5.9）。
+
 ---
 
 ## 5. 逻辑量盘点（§12 推进规则第 2 条：只增不减视为失控信号）

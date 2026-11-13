@@ -79,6 +79,20 @@ public class OrderAndDataTests
         Assert.Contains(map, l => l.StartsWith("OnConsumption", StringComparison.Ordinal) && l.Contains("10prepost"));
     }
 
+    [Fact]
+    public void 收尾与校验hook各只广播一次()
+    {
+        var map = SimOrder.DescribeHookMap();
+        // OnTurnEnd 只允许落在第 15 步末。旧实现结算后再补发一次 step=0 的广播，
+        // 导致挂在这里的处理器一年跑两遍（REVIEW-M0-M4 §7）。
+        Assert.Contains(map, l => l.StartsWith("OnTurnEnd", StringComparison.Ordinal) && l.EndsWith("15post", StringComparison.Ordinal));
+        // OnActionValidate 是逐条命令的校验点（ExecuteCommand），不是步骤事件。
+        Assert.Contains(map, l => l.StartsWith("OnActionValidate", StringComparison.Ordinal) && l.Contains("不落在任何步骤"));
+        // 第 1 步末换成独立的意图段收尾点，不再复用校验点。
+        Assert.Equal(HookPoint.OnIntentEnd, SimOrder.Steps[0].Post);
+        Assert.Contains(map, l => l.StartsWith("OnIntentEnd", StringComparison.Ordinal) && l.EndsWith("01post", StringComparison.Ordinal));
+    }
+
     // ================= 数据注册表 =================
 
     private const string SchemaJson = """

@@ -1,6 +1,6 @@
 # CORE_API · Core 对外接口
 
-> **接口版本：`CoreInfo.ApiVersion = "1.0"`**（`src/SimCore/Plugins.cs:10`）
+> **接口版本：`CoreInfo.ApiVersion = "1.1"`**（`src/SimCore/Plugins.cs:10`）
 > 插件 manifest 的 `api` 字段必须与它**同主版本**（`ApiMajor = 1`），否则 `PluginHost` 拒载
 > 并报「Core API 主版本不符」。GDD §11.4：Core 的接口变更必须走这份文档的版本号。
 
@@ -388,7 +388,7 @@ class PluginHost { IReadOnlyList<LoadedPlugin> Loaded; IReadOnlyList<string> Loa
                    void LoadFromDirectory(root, IPluginRegistrar);
                    void LoadFromAssemblies(assemblies, IPluginRegistrar);
                    IReadOnlyList<string> DescribeLoaded(); }
-static class CoreInfo { ApiVersion "1.0"; ApiMajor 1; ApiMinor 0; SchemaVersion 1; GameVersion "0.1.0";
+static class CoreInfo { ApiVersion "1.1"; ApiMajor 1; ApiMinor 1; SchemaVersion 1; GameVersion "0.1.0";
                         MapGenVersion 6; string Describe }
 ```
 
