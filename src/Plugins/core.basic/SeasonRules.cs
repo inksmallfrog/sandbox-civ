@@ -181,9 +181,13 @@ public static class SeasonRules
     // ========== 第 10 步 consumption：口粮、满足率、仓满抛洒与损耗（§4.2 s_c、§5.4 步 6）==========
 
     /// <summary>
-    /// M4：循环全部阶级 × 全部 consumes.* 商品（原来只处理 peasant → food）。
-    /// 简化决策：ration 取 food 的 got/want（§4.2 的 s_c），没有 food 需求的阶级取第一个消耗商品的 ration。
-    /// 仓满抛洒 + 损耗循环所有商品（不是只 food）。
+    /// 第 10 步：口粮、满足率、仓满抛洒与年损耗。
+    ///
+    /// **短缺时按需求比例配给**（GDD v1.1 §5.4）：先汇总全镇每种商品的总需求，
+    /// 再算统一配给率 <c>s = min(1, 可用 / 总需求)</c>，最后每个阶级按自己的需求乘同一个率。
+    /// 禁止按阶级 id、数据文件顺序或遍历顺序分配——旧实现按 <c>class.artist → … → class.worker</c>
+    /// 的 id 序扣粮，等于让文艺家先吃饱、农民吃剩饭（REVIEW-M0-M4 §3.1）。
+    /// 配给率仍是公式三的输入，公式本身不变；价格仍只是信号（M5a 再接购买力）。
     /// </summary>
     public static void Consume(EntityId town, HookArgs args, IStepContext ctx)
     {
@@ -195,7 +199,10 @@ public static class SeasonRules
             ctx.Mutate(town, F.TownSpilled(good.Id), Fix.Zero, "第 10 步清本期抛洒");
         }
 
-        // ---- 循环全部阶级 × 全部 consumes.* 键 ----
+        // ---- 第一遍：汇总每种商品的总需求（只报数，不扣库存）----
+        var wants = new List<(string Cid, string GoodShort, Fix Want)>();
+        var totalWant = new SortedDictionary<string, Fix>(StringComparer.Ordinal);
+
         foreach (var cls in ctx.Data.OfType(F.TypeClass))
         {
             string cid = cls.Id;
@@ -205,11 +212,6 @@ public static class SeasonRules
                 ctx.Mutate(town, F.TownRation(cid), Fix.One, "P = 0 ⇒ 自动 1.00 满足率");
                 continue;
             }
-
-            Fix? foodGot = null, foodWant = null;  // 用于计算该阶级的 ration（简化取 food）
-            Fix firstGot = Fix.Zero, firstWant = Fix.Zero;
-            string? firstGoodShort = null;
-            bool firstSeen = false;
 
             var consumeKeys = cls.Scalars
                 .Where(kv => kv.Key.StartsWith("consumes.", StringComparison.Ordinal))
@@ -225,36 +227,56 @@ public static class SeasonRules
                 if (!ctx.Data.TryGet(goodId, out _)) continue;
 
                 Fix want = Fix.Mul(need, pop);
-                Fix have = ctx.GetFix(town, F.TownStock(goodId), Fix.Zero);
-                Fix got = Fix.Min(have, want);
-
-                // 扣库存
-                ctx.AddFix(town, F.TownStock(goodId), -got,
-                    $"第 10 步 {cls.GetStr("title")} 耗 {goodShort} −{got.Text}（需求 {want.Text}）");
-                // 累积 consumed（§5.9 守恒）
-                ctx.AddFix(town, F.TownConsumed(goodId), got,
-                    $"§5.9 守恒：{cls.GetStr("title")} 耗 {goodShort} {got.Text}");
-
-                // 记录第一个 seen 的商品（fallback ration）
-                if (!firstSeen) { firstSeen = true; firstGot = got; firstWant = want; firstGoodShort = goodShort; }
-
-                // 记录 food（优先用于 ration 计算）
-                if (goodShort == "food") { foodGot = got; foodWant = want; }
+                wants.Add((cid, goodShort, want));
+                totalWant[goodId] = totalWant.TryGetValue(goodId, out Fix acc) ? acc + want : want;
             }
+        }
 
-            // ration：优先 food，否则第一个消耗商品（§4.2 的 s_c = min(1, 实得/需求)）
-            Fix chosenGot, chosenWant;
-            if (foodGot.HasValue) { chosenGot = foodGot.Value; chosenWant = foodWant!.Value; }
-            else if (firstSeen) { chosenGot = firstGot; chosenWant = firstWant; }
-            else { chosenGot = Fix.Zero; chosenWant = Fix.Zero; }
+        // ---- 第二遍：每种商品一个全镇统一的配给率（此时库存尚未被任何阶级扣走）----
+        var ratio = new SortedDictionary<string, Fix>(StringComparer.Ordinal);
+        foreach (var pair in totalWant)
+        {
+            Fix have = ctx.GetFix(town, F.TownStock(pair.Key), Fix.Zero);
+            ratio[pair.Key] = pair.Value.IsZero
+                ? Fix.One
+                : Fix.Min(Fix.One, Fix.Div(have, pair.Value));
+        }
 
-            Fix ration = chosenWant.IsZero ? Fix.One : Fix.Div(chosenGot, chosenWant);
+        // ---- 第三遍：每个阶级按同一比率扣自己的那份 ----
+        var firstRatio = new SortedDictionary<string, Fix>(StringComparer.Ordinal);
+        var foodRatio = new SortedDictionary<string, Fix>(StringComparer.Ordinal);
+        var firstGood = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (cid, goodShort, want) in wants)
+        {
+            string goodId = "good." + goodShort;
+            Fix r = ratio[goodId];
+            Fix got = Fix.Mul(want, r);
+
+            ctx.AddFix(town, F.TownStock(goodId), -got,
+                $"第 10 步 {ctx.Data.Get(cid).GetStr("title")} 耗 {goodShort} −{got.Text}" +
+                $"（需求 {want.Text} × 配给率 {r.Text}，§5.4 按需求比例）");
+            ctx.AddFix(town, F.TownConsumed(goodId), got,
+                $"§5.9 守恒：{ctx.Data.Get(cid).GetStr("title")} 耗 {goodShort} {got.Text}");
+
+            if (!firstRatio.TryGetValue(cid, out Fix rmin) || r < rmin) firstRatio[cid] = r;
+            if (!firstGood.ContainsKey(cid)) firstGood[cid] = goodShort;
+            if (goodShort == "food") foodRatio[cid] = r;
+        }
+
+        // ---- 满足率 s_c：优先口粮配给率，没有口粮需求的阶级取自己见过的最低配给率 ----
+        foreach (var pair in firstRatio)
+        {
+            string cid = pair.Key;
+            Fix ration = foodRatio.TryGetValue(cid, out Fix fr) ? fr : pair.Value;
             ctx.Mutate(town, F.TownRation(cid), ration,
-                $"s_c = min(1, 实得/需求)（§4.2），公式三的输入" +
-                (chosenWant.IsZero ? "" : $"（{firstGoodShort ?? "?"}：{chosenGot.Text}/{chosenWant.Text}）"));
+                $"s_c = min(1, 可用/总需求)（GDD v1.1 §5.4，各阶级同率），公式三的输入");
 
             if (ration < Fix.One)
-                ctx.Note($"{ctx.GetStr(town, F.TownName)}：{cls.GetStr("title")}的{firstGoodShort ?? "口粮"}只够 {Percent(chosenGot, chosenWant)}%");
+            {
+                ctx.Note($"{ctx.GetStr(town, F.TownName)}：{ctx.Data.Get(cid).GetStr("title")}的" +
+                         $"{(foodRatio.ContainsKey(cid) ? "food" : firstGood[cid])}只够 {ration.Text} 的配给率");
+            }
         }
 
         // ---- 仓满抛洒 + 年损耗（循环所有商品）----

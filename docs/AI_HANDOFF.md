@@ -23,7 +23,8 @@
 - **M4 切片二结论（D-040）**：罚则改回 §4.2 原值（怠工 0.85、罢工/暴动 0.60），反抗改成
   `town.riot.<阶级>` 分阶级计数、连续 2 年升一级，暴动启动 3 年控制权倒计时；§4.4 解锁链（六种建筑）、
   §4.7 阶级转化（`shareTarget` 占位，D-041）、§4.3 原料约束与 §4.9 的料/器算例全部接上；
-  §4.7 拥挤项把 200 年基线从「坍缩到 pop=6」拉回「稳定在 2 城 / pop≈117」。
+  §4.7 拥挤项把 200 年基线从「坍缩到 pop=6」拉回「稳定在 2 城 / pop≈112」；
+  D-042 按需求比例配给后最低满意从 26.4 回到 37.2（旧值作废，见 §1 基线表）。
   税制（抗税 −50%）、多商品建筑造价、吸引力真式仍是欠账。
   原料约束（outputCost.*）与解锁闸门（unlockPop > 0）推切片二。
 
@@ -32,7 +33,7 @@
 ## 1. 仓库实况（2026-11-13 M4 切片二验收后当场核对）
 
 > 宿主 #1 复核（2026-11-13 合并 M2 切片四 + M3/M4 后）：.NET SDK 10.0.201（共享运行时含 8.0.25）；Godot .NET 4.7.2 位于
-> `E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`。构建、97 条测试、
+> `E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`。构建、100 条测试、
 > `check/hash/replay`、200 年基线与 Godot `-- --smoke` 全部通过；CLI 与 Godot 末态哈希同为 `fc88ca36ce90fb37`，
 > Godot 输出 `SMOKE PASS`、拾取 1920/1920、五图层与形胜 52 格 / 资源 56 格。
 > 地图形状为 32×20，九类地表由数据里的气候区间分类，河网/水体/形胜/资源由 §3.7 六步生成，MapGenVersion=6；跨 OS 仍待 CI。
@@ -40,13 +41,13 @@
 | 项 | 值 | 复现 |
 |---|---|---|
 | 分支 | `master` 合并 `origin/master`（M3/M4 四个提交）后的工作树；尚未推送 | `git log --oneline --graph -8` |
-| 工作区 | 合并冲突只在三份文档；代码自动合并后 97 条测试全绿 | `git status --short` |
-| 测试 | **97 绿，0 跳过** | `dotnet test --nologo` |
+| 工作区 | 合并冲突只在三份文档；代码自动合并后 100 条测试全绿 | `git status --short` |
+| 测试 | **100 绿，0 跳过** | `dotnet test --nologo` |
 | 确定性自检 | `4e1f5c96888da71f`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
 | 跨宿主末回合哈希 | `fc88ca36ce90fb37`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值；`SMOKE PASS`，拾取 1920/1920 |
 | 快照往返 | `1ad5c84b9f9e468b`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
 | 续跑等价 | `f5fda8d1f5f68d3f`（一口气跑满 = 存盘续跑） | 同上 |
-| 200 年基线 | seed 42 末态 `c627c4d01388e426`，`dataHash 495c26d59b6e2362`，2 城 / 人口 117 / 最低满意 26.4 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv`（死亡螺旋已在 D-040 修掉，见 §5 坑 22） |
+| 200 年基线 | seed 42 末态 `4f3cad2796a670fa`，`dataHash 495c26d59b6e2362`，2 城 / 人口 112 / 最低满意 37.16 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv`（D-042 按需求比例配给后重测；旧值 `c627c4d01388e426` / 117 / 26.4 已作废） |
 | 建图耗时 | 约 74 ms / 640 格（§12 M2 判据 < 1000 ms） | `sim map --seed 7` 的 `core.basic：建图 … ms` |
 | 代码量 | SimCore 20 文件 / 3404 行 · core.basic 10 / 2357 · CLI+Godot 1562 · 测试 1827 | 排除 `bin/obj` 后统计 `.cs` 行 |
 
@@ -117,7 +118,7 @@
 | 本轮 CI | 三 job × ubuntu/windows 工作流 + Windows #2 等价复验 + 更正 seed 99 文档基线 | D-032（补漏记基线）；CI 本身数值零变化 |
 | `f9c2f7d` | M3 单镇经济：公式二 + 守恒等式 + 价格区间不变量 + 4 条测试 | **D-037**（见 CHANGELOG-DESIGN.md §3，含完整模拟差异表；与 M2 切片三的 D-035 撞号，合并时把 M3/M4 顺延到 D-037/D-038） |
 | `f0521a9` | M4 切片一：八阶级循环 + 状态机五档 + 多商品价格 + 5 条测试 | **D-038**（见 CHANGELOG-DESIGN.md §3） |
-| 本轮 M4-2 | 罚则对齐 + 分阶级反抗 + 暴动倒计时 + 解锁链 + 阶级转化 + 原料约束 + 饥饿螺旋修复（97 条测试） | **D-040**（D-041 为待裁决的转化/住房占位） |
+| 本轮 M4-2 | 罚则对齐 + 分阶级反抗 + 暴动倒计时 + 解锁链 + 阶级转化 + 原料约束 + 饥饿螺旋修复（100 条测试） | **D-040**（D-041 为待裁决的转化/住房占位） |
 | 本轮 M2-1 | 地图 32×20 矩形 + `MapGenVersion=3` + `sim map` 建图计时 + Godot 缩放/拾取适配 + 3 条地图测试 | D-033（附全基线重排表） |
 | 本轮 M2-2 | 九类地表 + 温度/降水分类（数据声明 class.* 区间）+ `MapGenVersion=4` + 2 条气候测试 | D-034（附全基线重排表） |
 | 本轮 M2-3 | 河网（§3.3 有向边）+ 水体层（§3.1 湖/近海）+ 水利系数 1.15 + `MapGenVersion=5` + 5 条河网/水体测试 | D-035（附全基线重排表） |
@@ -297,7 +298,7 @@ GitHub run #1 的 `godot-smoke` 就是这么红的（日志里先出现 `4.7.2.s
 
 ```bash
 dotnet build -v q --nologo                          # 0 错误（warning = error，坑 9）
-dotnet test --nologo                                # 97 绿
+dotnet test --nologo                                # 100 绿
 dotnet build src/GodotShell/HexaCiv.GodotShell.csproj # GodotShell 不在 solution，单独编译以免加载旧 DLL
 dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
 dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12

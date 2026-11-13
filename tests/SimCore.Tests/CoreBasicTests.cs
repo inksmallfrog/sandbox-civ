@@ -479,6 +479,81 @@ public class CoreBasicTests
         }
     }
 
+    // ================= 第 10 步配给（GDD v1.1 §5.4 / REVIEW-M0-M4 P0-1）=================
+
+    /// <summary>
+    /// 把一座城压成「文艺家 4 + 农民 6」的短缺场景：清空产出、给定口粮库存。
+    /// 文艺家的 id 以 a 开头、农民以 p 开头，正好覆盖「按 id 序分饭」会出错的两端。
+    /// </summary>
+    private static (Fix Expected, Fix TotalWant) ShortageScenario(Simulation sim, Fix stockFood)
+    {
+        var town = Town(sim);
+        long popPeasant = 6, popArtist = 4;
+        sim.World.WriteRaw(town.Id, F.TownPop("class.peasant"), SimValue.OfInt(popPeasant));
+        sim.World.WriteRaw(town.Id, F.TownPop("class.artist"), SimValue.OfInt(popArtist));
+        sim.World.WriteRaw(town.Id, F.TownStock("good.food"), SimValue.Of(stockFood));
+        foreach (var t in Tiles(sim, town.Id))
+        {
+            sim.World.WriteRaw(t.Id, F.HexYieldFood, SimValue.Of(Fix.Zero));
+            sim.World.WriteRaw(t.Id, F.HexYieldMat, SimValue.Of(Fix.Zero));
+        }
+
+        Fix needP = sim.Data.Get("class.peasant").GetFix("consumes.food");
+        Fix needA = sim.Data.Get("class.artist").GetFix("consumes.food");
+        Fix total = Fix.Mul(needP, Fix.FromInt(popPeasant)) + Fix.Mul(needA, Fix.FromInt(popArtist));
+        return (Fix.Min(Fix.One, Fix.Div(stockFood, total)), total);
+    }
+
+    /// <summary>
+    /// GDD v1.1 §5.4：短缺时按需求比例配给，所有阶级拿到同一个 s_c。
+    /// 旧实现按阶级 id 序扣粮（class.artist 先于 class.peasant），文艺家先吃饱、农民吃剩饭。
+    /// </summary>
+    [Fact]
+    public void 短缺时文艺家与农民拿到同一个配给率()
+    {
+        var sim = OneTown(41);
+        var town = Town(sim);
+        var (expected, total) = ShortageScenario(sim, Fix.FromInt(5));
+
+        sim.AdvanceTurn();
+
+        Fix sP = sim.World.GetFix(town.Id, F.TownRation("class.peasant"), Fix.Zero);
+        Fix sA = sim.World.GetFix(town.Id, F.TownRation("class.artist"), Fix.Zero);
+        Assert.Equal(expected, sP);
+        Assert.Equal(expected, sA);
+        Assert.True(sP < Fix.One, $"库存 5.00 对需求 {total.Text}，配给率应小于 1，实际 {sP.Text}");
+    }
+
+    /// <summary>同一短缺场景下，总消耗不得超过期初库存（比例配给的守恒底线）。</summary>
+    [Fact]
+    public void 比例配给的总消耗不超过库存()
+    {
+        var sim = OneTown(43);
+        var town = Town(sim);
+        ShortageScenario(sim, Fix.FromInt(5));
+
+        sim.AdvanceTurn();
+
+        Fix consumed = sim.World.GetFix(town.Id, F.TownConsumed("good.food"), Fix.Zero);
+        Fix stockAfter = sim.World.GetFix(town.Id, F.TownStock("good.food"), Fix.Zero);
+        Assert.True(consumed <= Fix.FromInt(5), $"消耗 {consumed.Text} 超过期初库存 5.00");
+        Assert.True(stockAfter >= Fix.Zero, $"库存为负：{stockAfter.Text}");
+    }
+
+    /// <summary>口粮充足时两个阶级都是 s_c = 1，配给不该无缘无故打折。</summary>
+    [Fact]
+    public void 口粮充足时所有阶级配给率都是一()
+    {
+        var sim = OneTown(47);
+        var town = Town(sim);
+        ShortageScenario(sim, Fix.FromInt(100));
+
+        sim.AdvanceTurn();
+
+        Assert.Equal(Fix.One, sim.World.GetFix(town.Id, F.TownRation("class.peasant"), Fix.Zero));
+        Assert.Equal(Fix.One, sim.World.GetFix(town.Id, F.TownRation("class.artist"), Fix.Zero));
+    }
+
     // ================= 人口（附录 A §8 / §4.2）=================
 
     [Fact]
