@@ -602,6 +602,127 @@ public class CoreBasicTests
         Assert.Equal(total, sum);
     }
 
+    // ================= P0-2 价格（GDD v1.1 §5.3 公式二）=================
+
+    /// <summary>
+    /// 把城镇压成「零产出、指定人口与口粮库存」的纯净市场，并把粮价重置为基准价 p0，
+    /// 返回 p_prev。零产出靠清空辖地粮潜力（Produce 的 hard cap 直接归零）。
+    /// </summary>
+    private static Fix MarketSetup(Simulation sim, long pop, Fix stockFood)
+    {
+        var town = Town(sim);
+        sim.World.WriteRaw(town.Id, F.TownPop("class.peasant"), SimValue.OfInt(pop));
+        sim.World.WriteRaw(town.Id, F.TownStock("good.food"), SimValue.Of(stockFood));
+        foreach (var t in Tiles(sim, town.Id))
+        {
+            sim.World.WriteRaw(t.Id, F.HexYieldFood, SimValue.Of(Fix.Zero));
+            sim.World.WriteRaw(t.Id, F.HexYieldMat, SimValue.Of(Fix.Zero));
+        }
+        Fix p0 = sim.Data.Get("good.food").GetFix("basePrice");
+        sim.World.WriteRaw(town.Id, F.TownPrice("good.food"), SimValue.Of(p0));
+        return p0;
+    }
+
+    /// <summary>§5.3 的 gap 在测试侧独立复写一遍：gap = (D − S) / max(S, 0.5)。</summary>
+    private static Fix Gap(Simulation sim, long pop, Fix supply)
+    {
+        Fix need = sim.Data.Get("class.peasant").GetFix("consumes.food");
+        Fix D = Fix.Mul(Fix.FromInt(pop), need);
+        return Fix.Div(D - supply, Fix.Max(supply, Fix.FromPercent(50)));
+    }
+
+    private static Fix FoodPrice(Simulation sim) =>
+        sim.World.GetFix(Town(sim).Id, F.TownPrice("good.food"), Fix.Zero);
+
+    /// <summary>
+    /// 供不应求：<c>p' = p × (1 + α·gap + shock)</c>，α = 0.30、gap = 8。
+    /// shock 是 N(0, 0.04) 的随机项，测试用 ±20% 的包络把它框住，
+    /// 但价格必须上涨、且不能越过 5×p0。
+    /// </summary>
+    [Fact]
+    public void 供不应求时价格按阿尔法乘缺口上涨()
+    {
+        var sim = OneTown(61);
+        Fix pPrev = MarketSetup(sim, 4, Fix.Zero);
+        Fix gap = Gap(sim, 4, Fix.Zero);                       // D = 4，S = 0 ⇒ gap = 8
+        Fix expected = Fix.Mul(pPrev, Fix.One + Fix.Mul(Fix.FromPercent(30), gap));
+
+        sim.AdvanceTurn();
+
+        Fix price = FoodPrice(sim);
+        Fix diff = price - expected;
+        Fix envelope = Fix.Mul(expected, Fix.FromPercent(20));
+
+        Assert.True(price > pPrev, $"供不应求价格应上涨：{pPrev.Text} → {price.Text}");
+        Assert.True(diff.Raw <= envelope.Raw && diff.Raw >= -envelope.Raw,
+            $"解析解 {expected.Text}（p×{Fix.One + Fix.Mul(Fix.FromPercent(30), gap)}）与实测 {price.Text} 超出 20% 包络");
+        Assert.True(price <= Fix.FromInt(20), $"价格 {price.Text} 越过 5×p0 = 20.00 的封顶");
+    }
+
+    /// <summary>供过于求：gap ≈ −0.96 ⇒ change ≈ 0.71，价格下行且不得跌破 0.2×p0 = 0.80。</summary>
+    [Fact]
+    public void 供过于求时价格下跌且不跌破下限()
+    {
+        var sim = OneTown(67);
+        Fix pPrev = MarketSetup(sim, 4, Fix.FromInt(100));
+        Fix gap = Gap(sim, 4, Fix.FromInt(100));
+        Fix expected = Fix.Mul(pPrev, Fix.One + Fix.Mul(Fix.FromPercent(30), gap));
+
+        sim.AdvanceTurn();
+
+        Fix price = FoodPrice(sim);
+        Fix diff = price - expected;
+        Fix envelope = Fix.Mul(expected, Fix.FromPercent(20));
+        Fix floor = Fix.Mul(pPrev, Fix.FromPercent(20));
+
+        Assert.True(price < pPrev, $"供过于求价格应下跌：{pPrev.Text} → {price.Text}");
+        Assert.True(diff.Raw <= envelope.Raw && diff.Raw >= -envelope.Raw,
+            $"解析解 {expected.Text} 与实测 {price.Text} 超出 20% 包络");
+        Assert.True(price >= floor, $"价格 {price.Text} 跌破 0.2×p0 = {floor.Text} 的下限");
+    }
+
+    /// <summary>
+    /// 极端短缺：D = 7、S = 0 ⇒ gap = 14 ⇒ change ≈ 5.2 &gt; 5，
+    /// 必须被 clamp 钉死在 5×p0 = 20.00（shock 只有 ±0.04 量级，改不了这个结论）。
+    /// </summary>
+    [Fact]
+    public void 极端短缺把价格封在五倍基准价()
+    {
+        var sim = OneTown(71);
+        Fix pPrev = MarketSetup(sim, 7, Fix.Zero);
+
+        sim.AdvanceTurn();
+
+        Fix ceil = Fix.Mul(pPrev, Fix.FromInt(5));
+        Assert.Equal(ceil, FoodPrice(sim));
+    }
+
+    /// <summary>
+    /// α 三档：市场每级 +0.05（§4.8）。同种子、同 S/D 下两条分支的 shock 完全相同，
+    /// 所以价格差必须恰好是 <c>p × 0.05 × gap</c>，而不是「大概更高」。
+    /// 市场建造成本 5 石从镇仓扣，所以另一条分支多给 5 石，让两边第 6 步的 S 都是 10。
+    /// </summary>
+    [Fact]
+    public void 市场把价格弹性从零点三抬到零点三五()
+    {
+        var plain = OneTown(73);
+        Fix pPrev = MarketSetup(plain, 7, Fix.FromInt(10));
+
+        var withMarket = OneTown(73);
+        MarketSetup(withMarket, 7, Fix.FromInt(15));
+        withMarket.SubmitTarget("host", "building.build", "建市场",
+            ("town", "auto"), ("building", "building.market"));
+        Assert.Single(withMarket.AdvanceTurn().Commands, c => c.Accepted);
+        plain.AdvanceTurn();
+
+        Fix gap = Gap(plain, 7, Fix.FromInt(10));               // D = 7，S = 10 ⇒ gap = −0.30
+        Fix delta = Fix.Mul(pPrev, Fix.Mul(Fix.FromPercent(5), gap));
+        Fix diff = FoodPrice(withMarket) - FoodPrice(plain);
+
+        Assert.True(Math.Abs(diff.Raw - delta.Raw) <= 2,
+            $"α 高 0.05 应让价格多走 p×0.05×gap = {delta.Text}，实测差 {diff.Text}");
+    }
+
     // ================= 人口（附录 A §8 / §4.2）=================
 
     [Fact]
