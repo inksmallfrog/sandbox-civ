@@ -229,6 +229,47 @@
 
 ---
 
+### D-035 M4 切片一：八阶级循环 + 状态机五档 + 多商品价格
+
+- 日期：2026-11-13 / 类型：功能扩展 / 状态：已实现，切片一完成
+- **为什么改**：M1 只有农民、只有粮、只有三档状态（服从/抱怨/反抗）。GDD §4.3 八阶级是文明的骨架，三条公式要能循环多阶级 × 多商品才能支撑八阶级的行为差异。切片一先把循环跑起来、五档状态机兑现罚则、价格求解器扩展到 4 种商品，原料约束（outputCost）和解锁闸门（unlockPop > 0）推切片二。
+
+- **改了什么**：
+  - `data/core.basic/class.json`：从 1 条 `class.peasant` 扩到 8 条（peasant/worker/merchant/priest/bureaucrat/scholar/soldier/artist），数值照抄 GDD §4.3 表。全部先 unlocked（unlockPop=0），解锁闸门推切片二。祭司/学者/文艺家的非物质产出（信仰/知识/文化）切片一 stub（有消费无产出）。
+  - `src/Plugins/core.basic/F.cs`：新增 `TownStatusPrev(clsId)`（状态机上回合值，供 `basic.class_monotonic` 不变量读）和 `TownWealth(clsId)`（阶级持有银，GDD §4.1，切片一先写字段路径不接逻辑）。
+  - `SeasonRules.Produce`：从只处理 `peasant → food` 改成循环 `ctx.Data.OfType(F.TypeClass)` × 循环每个阶级的 `output.*` 前缀键。状态机 multiplier：怠工=50%、罢工/暴动=0%、服从/抱怨=100%。hard cap（Cap × Facility）目前只对农民产粮生效（GDD §5.2 第一产业受地约束），非第一产业阶级先只用 soft cap。多阶级产同一商品时用 AddFix 累加到 output 字段（先清零再循环）。
+  - `SeasonRules.Consume`：从只处理 `peasant → food` 改成循环所有阶级 × 所有 `consumes.*` 前缀键。ration（s_c）简化决策：优先取 food 的 got/want，没有 food 需求的阶级取第一个消耗商品。仓满抛洒 + 年损耗循环所有商品（原来只循环 food）。
+  - `Pricing.Price`：从只跑 `good.food` 改成循环除 silver 外所有 4 种商品（food/mat/goods/lux）。D（本期需求）从只算 peasant 的 food 需求改成循环所有阶级的 `consumes.{goodShort}` × pop 汇总。公式参数不变：α=0.30、shock N(0,0.04)、clamp [0.2×p0, 5×p0]。
+  - `SeasonRules.Satisfaction`：状态机从三档（服从 S>55 / 抱怨 30<S≤55 / 反抗 S≤30）改成五档（服从 / 抱怨 / 怠工 riot≥2 / 罢工 riot≥3 / 暴动 riot≥4）。先存 prevStatus 到 `TownStatusPrev` 再算 next，为 `class_monotonic` 不变量提供输入。riot 还是全局计数（简化决策，per-class riot 推切片二）。
+  - `BasicPlugin`：新增 `basic.class_monotonic` 不变量（第 12 步末，检查状态只能逐步恶化或返回）；`basic.conservation` 从只循环 food 改成循环除 silver 外所有商品；原有 `basic.ranges` 和 `basic.price_bounds` 不变量保持不变。
+  - 测试：原有 69 条全绿（其中 1 条灾年测试硬编码 "反抗" 改成 "暴动"，因为 20 年断粮 riot≥4），新增 5 条：`八阶级循环五回合不崩` / `满意度满四年跌破三十到暴动档` / `怠工状态下产出折半` / `罢工状态下产出归零` / `四种商品价格都在区间内`。class_monotonic 集成测试跳过（正常游戏流里 Satisfaction 会自己维护 StatusPrev，跳级在运行时不可能发生）。
+
+- **没改什么（切片二债）**：
+  - 原料约束（`outputCost.*`）暂时忽略。工人产器耗料 1.2/人/年 的约束逻辑推切片二。
+  - 解锁闸门（`unlockPop > 0`）暂时全部阶级 unlocked。阶级切换/解锁逻辑推切片二。
+  - 非第一产业 hard cap（Cap × Facility 对工人/商人等阶级不生效）。
+  - `TownWealth` 字段路径已写但不接逻辑（M5 税制时接入）。
+  - per-class riot 计数（当前全局一个 riot 覆盖所有阶级的 S<30 连续年数）。
+  - Demography 人口增长/阶级转化：当前只对 peasant 有增长，其他阶级 M4 切片一不接增长逻辑。
+
+- **模拟差异（M3 → M4）**：
+  - **确定性**：seed=7 两遍 6 回合同 hash（`9c29b42e2868ef10`，M3 是 `9fe62d078937e3ef`）；seed=42 两遍 200 回合同 hash（`e824c66acc43569b`，M3 是 `e7e69b15db632966`）。值变了是预期内——状态机从 3 档改 5 档、多商品都跑价格/消耗、Conservation 循环扩展。
+  - **行为差异**：M4 切片一建城时**只初始化 peasant 的 pop/sat/growth**（其他 7 阶级 pop=0 自动跳过 Produce/Consume/Satisfaction），所以**单镇、单阶级、只有农民**的模拟轨迹和 M3 基本一致。差异来源：（1）状态机字符串从 "反抗" 变成 "怠工/罢工/暴动" 多档，虽然数值计算逻辑一样；（2）Pricing 对 mat/goods/lux 也跑价格公式，虽然这些商品目前库存=0、D=0，p_t+1 ≈ p_t（基本不涨不跌）；（3）Conservation 循环所有商品（silver 跳过），新增 3 个守恒检查点。
+  - **存档兼容**：旧存档没有 `TownStatusPrev.*` 字段，class_monotonic 不变量会因为 Rank=-1 跳过（`rp < 0 || rn < 0`），不触发错误。新字段全部有 fallback，不需要迁移器。
+  - **SimCore 零改动**：所有改动在插件层。
+  - **hook 落点 15 步 21 不变**：`sim check` 显示 hook 落点和 M3 完全一样，三个新增不变量挂在第 12 步末（class_monotonic）和第 10 步末（conservation 扩展后还是同一个不变量，只是循环范围变了）。
+  - **dataHash 变了**：M3 `eebed2c6f0ba30d1` → M4 `8a19d5bcee5da2fa`（class.json 从 1 条扩到 8 条）。
+
+- **回归结果**：
+  - `dotnet build` — 0 error / 0 warning
+  - `dotnet test` — 74/74 全绿（69 原有 + 5 M4 新增）
+  - `sim check` — 15 步 / 21 落点（7 不落在任何步骤），dataHash=8a19d5bcee5da2fa
+  - `sim hash --seed 7 --turns 6` — 两遍同 9c29b42e2868ef10
+  - `sim run --seed 42 --turns 200` — 两遍同 e824c66acc43569b
+  - `sim run --no-plugins --no-data --turns 1000` — 无崩溃
+
+---
+
 ## 4. 引用修正（不改行为，但指错章节会让下一个人按错的规则改代码）
 
 ### D-030 全仓库 GDD 章节引用审计

@@ -60,6 +60,8 @@ public static class F
     public static string TownRation(string classDefId) => "town.ration." + Bare(classDefId);
     public static string TownGrowth(string classDefId) => "town.growth." + Bare(classDefId);
     public static string TownStatus(string classDefId) => "town.status." + Bare(classDefId);
+    public static string TownStatusPrev(string classDefId) => "town.statusPrev." + Bare(classDefId);
+    public static string TownWealth(string classDefId) => "town.wealth." + Bare(classDefId);
     public static string TownBuilding(string buildingDefId) => "town.building." + Bare(buildingDefId);
     public static string TownStock(string goodDefId) => "town.stock." + Bare(goodDefId);
     public static string TownStockCap(string goodDefId) => "town.stockCap." + Bare(goodDefId);
