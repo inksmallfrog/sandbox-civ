@@ -608,6 +608,34 @@
   `scripts/classes.txt` 全阶级基线重跑后再下新结论。
   `BALANCE.md` §4、`AGENTS.md` §7、`AI_HANDOFF.md` §1 的期望值已同步。
 
+### D-043 P0-3 全局守恒：仓底划转、镇 + 国账本、人口守恒
+
+- 日期：2026-11-13 / 类型：规则实现 / 状态：**已实现**
+- 改了什么：
+  1. **建城仓底改为划转**（§3.8 / GDD v1.1 §5.9）：`town.found` 从国库一次扣「成本 6 + 仓底 8」，
+     再把 8 石记进新城；独立城镇没有国库，仍自备仓底并在 reason 里标注。
+     开局国库 40 → 60 石——否则第三次建城就被拒，验收与存档测试都会红。
+  2. **全局账本**：第 6 步把国库每类物资快照到 `nation.ledger.*`，
+     第 10 步末 `basic.conservation` 按商品汇总「镇 + 国」的期初与期末（库存 + 消耗 + 损耗 + 抛洒）；
+     银单独在第 6 步写 `town.supply.good.silver` 快照，M5 之前它的总量必须恒定。
+  3. **`town.pop.total` + `basic.population`**：第 13 步末写全阶级合计，并校验 Σ 阶级 == 总数，
+     阶级转化只能搬人、不能造人。
+  4. `TownOps.TotalPop` 改为按阶级定义求和（原来扫 `town.pop.` 前缀，会把新加的 `town.pop.total` 也加进去，
+     第 13 步写回时变成 4 → 8 → 12 的自我累加）。
+- 模拟差异（当场复验，2026-11-13）：
+
+  | 命令 | D-042 值 | D-043 值 |
+  |---|---|---|
+  | `hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | `fc88ca36ce90fb37` | `4983eb54fb4de27a` |
+  | `hash --seed 99 --turns 50` | `4e1f5c96888da71f` | `b9c1f7cbfbe0928b` |
+  | `replay --seed 5 --turns 20 --at 12` | `1ad5c84b9f9e468b` / `f5fda8d1f5f68d3f` | `6ef1f5877c6eed22` / `5dbb715fcf6222b3` |
+  | `run --seed 42 --turns 200` | `4f3cad2796a670fa` | `73077833df98cffb` |
+  | `dotnet test` | 100 | 102 |
+
+  哈希全员变化，是因为世界状态新增了 `town.pop.total` 与 `nation.ledger.*`（哈希覆盖全部字段），
+  **不是模拟数值分叉**：200 年末行仍是 2 城 / 112 / 粮产 82.05 / 粮需 111.20 / minSat 37.16，
+  与 P0-1 后逐列一致。`dataHash` 不变（`495c26d59b6e2362`，没有改 `data/*.json`）。
+
 ---
 
 ## 5. 逻辑量盘点（§12 推进规则第 2 条：只增不减视为失控信号）

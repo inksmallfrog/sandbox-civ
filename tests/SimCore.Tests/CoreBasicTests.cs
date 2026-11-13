@@ -554,6 +554,54 @@ public class CoreBasicTests
         Assert.Equal(Fix.One, sim.World.GetFix(town.Id, F.TownRation("class.artist"), Fix.Zero));
     }
 
+    // ================= P0-3 全局守恒（REVIEW-M0-M4 §3.3）=================
+
+    /// <summary>
+    /// §3.8：开城仓底 8 石必须从国库<b>划转</b>，不是新生成的物资。
+    /// 旧实现在新城写 8 石、国库只扣 6 石成本，每建一城净增 8 石（P0-3 的泄漏）。
+    /// </summary>
+    [Fact]
+    public void 建城仓底从国库划转而不是凭空生成()
+    {
+        var sim = Open(53);
+        sim.SubmitTarget("host", "nation.found", "开局", ("name", "吴"));
+        sim.AdvanceTurn();
+        var nation = Assert.Single(sim.World.OfKind("nation"));
+        Fix before = sim.World.GetFix(nation.Id, F.NationStockFood, Fix.Zero);
+
+        sim.SubmitTarget("host", "town.found", "新邑", ("hex", "auto"), ("nation", "auto"));
+        Assert.Single(sim.AdvanceTurn().Commands, c => c.Accepted);
+
+        var town = Town(sim);
+        Fix after = sim.World.GetFix(nation.Id, F.NationStockFood, Fix.Zero);
+        Fix paid = TownOps.FoundCostFood + TownOps.FoundStockFood;
+
+        // 国库一次扣掉「成本 6 + 仓底 8」：旧实现只扣 6，仓底那 8 石是新生成的。
+        // 建城当年还有产出（本回合可能 Produc 出粮），所以不适合用库存/供应量反推总量；
+        // 「扣了 14」本身就是仓底划转的直接证据。
+        Assert.Equal(before - paid, after);
+        Assert.NotNull(town);
+    }
+
+    /// <summary>
+    /// §5.9 人口守恒：Σ 阶级人口 == <c>town.pop.total</c>，且阶级转化只搬人不造人。
+    /// 这条不变量每回合都由 <c>basic.population</c> 兜底，这里显式钉一次口径。
+    /// </summary>
+    [Fact]
+    public void 阶级转化不改变人口总数()
+    {
+        var sim = OneTown(59, 6);
+        var town = Town(sim);
+
+        long total = sim.World.GetInt(town.Id, F.TownPopTotal, -1);
+        long sum = 0;
+        foreach (var cls in sim.Data.OfType(F.TypeClass))
+            sum += sim.World.GetInt(town.Id, F.TownPop(cls.Id), 0);
+
+        Assert.True(total > 0, "六回合后总人口应大于 0，否则守恒是 0 = 0 的空断言");
+        Assert.Equal(total, sum);
+    }
+
     // ================= 人口（附录 A §8 / §4.2）=================
 
     [Fact]
@@ -688,8 +736,10 @@ public class CoreBasicTests
         foreach (var town in sim.World.OfKind("town"))
         {
             towns++;
-            // 与 TownOps.TotalPop 同一条判据：遍历 pop.* 前缀，阶级增减都不用改这里
-            pop += town.Prefix("town.pop.").Sum(kv => kv.Value.AsInt());
+            // 与 TownOps.TotalPop 同一条判据：只按阶级定义求和，
+            // 不能扫 pop.* 前缀——那会把派生字段 town.pop.total 也算进去
+            foreach (var cls in sim.Data.OfType(F.TypeClass))
+                pop += sim.World.GetInt(town.Id, F.TownPop(cls.Id), 0);
             produced += sim.World.GetFix(town.Id, F.TownOutput("good.food"), Fix.Zero);
             stock += sim.World.GetFix(town.Id, F.TownStock("good.food"), Fix.Zero);
             eaten += Fix.Mul(sim.Data.Get("class.peasant").GetFix("consumes.food"),

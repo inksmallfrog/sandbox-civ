@@ -39,6 +39,12 @@ public static class Pricing
             alpha += Fix.Mul(bonus, ctx.GetInt(town, F.TownBuilding(def.Id)));
         }
 
+        // silver 不参与价格求解，但 §5.9 的银守恒需要第 6 步的期初快照：
+        // M5 之前没有任何规则生产/消耗银，所以本步到第 10 步末之间它的总量必须恒定。
+        ctx.Mutate(town, F.TownSupply("good.silver"),
+            ctx.GetFix(town, F.TownStock("good.silver"), Fix.Zero),
+            "银：第 6 步期初快照（§5.9 银守恒，M5 前无进出口/税）");
+
         foreach (var good in ctx.Data.OfType(F.TypeGood))
         {
             // silver = 货币单位，不参与价格求解（§5.1 脚注）

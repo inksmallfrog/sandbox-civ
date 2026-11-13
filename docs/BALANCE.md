@@ -175,7 +175,7 @@ M3 接价格（4.00 石 × 小系数）、M4 接税率（20% × 小基数）时�
    反抗年数只在个别年份 > 0，年报的「不安城数」多数年份是 0。
 
 > 2026-11-13 M4 切片二（D-040）：罚则改回 §4.2 原值、反抗按阶级计数、接上 §4.7 拥挤项与 §4.3 的料/器循环。
-> 本表整表重跑（seed 42 / `scripts/demo.txt` / 200 年，末态 hash `4f3cad2796a670fa`，`dataHash 495c26d59b6e2362`）。
+> 本表整表重跑（seed 42 / `scripts/demo.txt` / 200 年，末态 hash `73077833df98cffb`，`dataHash 495c26d59b6e2362`）。
 > D-042 之前的旧表（末态 117 / minSat 26.37 / hash `c627c4d01388e426`）建立在「按阶级 id 序分饭」的遍历 bug 上，已作废。
 > 旧表对应「罚则过重 + 无拥挤」的死亡螺旋基线，已作废（`AI_HANDOFF.md` §5 坑 22、`ROADMAP.md` §4）。
 > **遗留**：最低满意在 26–30 附近波动是「地不够养这么多人」的有界坏均衡，不是新的死亡螺旋。
@@ -210,7 +210,7 @@ M3 接价格（4.00 石 × 小系数）、M4 接税率（20% × 小基数）时�
 
 ```bash
 dotnet build                                             # 0 warning 0 error（TreatWarningsAsErrors）
-dotnet test                                              # 100 条
+dotnet test                                              # 102 条
 dotnet run --project src/HexaCiv.Cli -- check            # 数据包 + 清单：dataHash 变了要认账
 dotnet run --project src/HexaCiv.Cli -- run --seed 42 --turns 200 --headless --out analysis/out/demo.csv
 dotnet run --project src/HexaCiv.Cli -- hash --seed 99 --turns 50   # 确定性自检（改了不该改的东西会红）

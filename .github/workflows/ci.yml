@@ -18,7 +18,7 @@ env:
   GODOT_VERSION: 4.7.2
   # 平台范围：**Windows + Linux 双系统**。设计者 2026-11-13 先要求 Windows-only，
   # 随后又要求把 Linux 验证加回来：跨 OS 同种子同哈希是 §10.7 的硬主张，必须两边都在跑。
-  EXPECTED_SMOKE_HASH: fc88ca36ce90fb37
+  EXPECTED_SMOKE_HASH: 4983eb54fb4de27a
 
 jobs:
   build-test:

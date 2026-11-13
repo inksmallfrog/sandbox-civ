@@ -71,6 +71,8 @@ public sealed class BasicPlugin : IPlugin
         api.RequireFor(HookPoint.OnProduction, F.KindTown, 100, SeasonRules.Produce);
 
         // 第 6 步首：城镇市场出清（公式二·本地层，α = 0.30）。落在 Summer 段、OnPriceForm 的 pre slot。
+        // 国库账本快照取 95，必须早于城镇出清（100），否则期末对账会漏掉国库这一侧。
+        api.Require(HookPoint.OnPriceForm, 95, Nations.SnapshotLedger);
         api.Require(HookPoint.OnPriceForm, 100, FanOut(HookPoint.OnPriceForm, F.KindTown, "market_local", SimOrder.SlotPre));
         api.RequireFor(HookPoint.OnPriceForm, F.KindTown, 100, Pricing.Price);
 
@@ -100,6 +102,8 @@ public sealed class BasicPlugin : IPlugin
         api.RegisterInvariant("basic.conservation", new[] { 10 }, Conservation);
         // M4 新增：状态机单调（第 12 步末校验——状态不可跳级）
         api.RegisterInvariant("basic.class_monotonic", new[] { 12 }, ClassMonotonic);
+        // P0-3 新增：人口守恒（第 13 步末校验——Σ 阶级人口 == town.pop.total）
+        api.RegisterInvariant("basic.population", new[] { 13 }, Population);
 
         // ---- 5. 图层声明（§3.9：图层是纯查询，Core 只转述标题与顺序）----
         api.RegisterLayer("terrain", "地形", 10);
@@ -300,6 +304,58 @@ public sealed class BasicPlugin : IPlugin
                 if (diff.Raw < -tolerance.Raw || diff.Raw > tolerance.Raw)
                     bad.Add($"{name}：{good.GetStr("title")}守恒破！supply {supply.Text} − stockAfter {stockAfter.Text} − consumed {consumed.Text} − spoiled {spoiled.Text} − spilled {spilled.Text} = {diff.Text}（§5.9 第一条物资守恒）");
             }
+        }
+
+        // ---- §5.9 全局账本：镇 + 国（在途物资 M5 才有）----
+        // 逐城检查只能证明「镇内没漏」；国库与跨实体划转在它的视野外，
+        // 所以再按商品把镇与国的期初、期末各汇总一次（REVIEW-M0-M4 §3.3）。
+        foreach (var good in ctx.Data.OfType(F.TypeGood))
+        {
+            Fix supply = Fix.Zero;
+            Fix end = Fix.Zero;
+
+            foreach (var town in ctx.EntitiesOfKind(F.KindTown))
+            {
+                supply += ctx.GetFix(town.Id, F.TownSupply(good.Id), Fix.Zero);
+                end += ctx.GetFix(town.Id, F.TownStock(good.Id), Fix.Zero)
+                     + ctx.GetFix(town.Id, F.TownConsumed(good.Id), Fix.Zero)
+                     + ctx.GetFix(town.Id, F.TownSpoiled(good.Id), Fix.Zero)
+                     + ctx.GetFix(town.Id, F.TownSpilled(good.Id), Fix.Zero);
+            }
+            foreach (var nation in ctx.EntitiesOfKind(F.KindNation))
+            {
+                supply += ctx.GetFix(nation.Id, F.NationLedger(good.Id), Fix.Zero);
+                end += ctx.GetFix(nation.Id, F.NationStock(good.Id), Fix.Zero);
+            }
+
+            Fix diff = supply - end;
+            if (diff.Raw < -tolerance.Raw || diff.Raw > tolerance.Raw)
+                bad.Add($"全局账本：{good.GetStr("title")} 期初 {supply.Text} ≠ 期末（库存+消耗+损耗+抛洒）{end.Text}，" +
+                        $"差 {diff.Text}（§5.9 第一条，镇 + 国 + 在途）");
+        }
+
+        return bad.Count == 0 ? InvariantResult.Ok : InvariantResult.Fail(bad.ToArray());
+    }
+
+    /// <summary>
+    /// 人口守恒（GDD v1.1 §5.9 / REVIEW-M0-M4 §3.3）：第 13 步末校验
+    /// <c>Σ town.pop.&lt;阶级&gt; == town.pop.total</c>。
+    /// 阶级转化只能搬人、不能造人；旧实现里没有 <c>town.pop.total</c>，这条守恒无处注册。
+    /// </summary>
+    private static InvariantResult Population(IStepContext ctx)
+    {
+        var bad = new List<string>();
+
+        foreach (var town in ctx.EntitiesOfKind(F.KindTown))
+        {
+            long sum = 0;
+            foreach (var cls in ctx.Data.OfType(F.TypeClass))
+                sum += ctx.GetInt(town.Id, F.TownPop(cls.Id));
+
+            long total = ctx.GetInt(town.Id, F.TownPopTotal);
+            if (sum != total)
+                bad.Add($"{ctx.GetStr(town.Id, F.TownName)}：Σ阶级人口 {sum} ≠ town.pop.total {total}" +
+                        $"（§5.9 人口守恒：转化只搬人不造人）");
         }
 
         return bad.Count == 0 ? InvariantResult.Ok : InvariantResult.Fail(bad.ToArray());

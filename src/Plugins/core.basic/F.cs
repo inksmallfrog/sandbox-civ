@@ -65,6 +65,7 @@ public static class F
     public const string TownFacility = "town.facility";          // fix: Facility_c，第 2 步算好给第 3 步读
     public const string TownRiot = "town.riot";                  // int: 本城最长连续 S<30 年数（§4.2；聚合值，年报/旧读者用）
     public const string TownCountdown = "town.countdown";        // int: 暴动控制权倒计时，3 年归零则脱离原属国（§4.2）
+    public const string TownPopTotal = "town.pop.total";         // int: 全阶级人口合计（§4.5；第 13 步末写，守恒不变量读）
 
     public static string TownPop(string classDefId) => "town.pop." + Bare(classDefId);
     public static string TownSat(string classDefId) => "town.sat." + Bare(classDefId);
@@ -93,6 +94,10 @@ public static class F
     public const string NationPlayer = "nation.player";          // bool：本机是否直接扮演它
     public const string NationCapital = "nation.capital";
     public const string NationStockFood = "nation.stock.food";
+
+    public static string NationStock(string goodDefId) => "nation.stock." + Bare(goodDefId);
+    /// <summary>§5.9 全局账本：第 6 步对国库每类物资快照，第 10 步末对账。</summary>
+    public static string NationLedger(string goodDefId) => "nation.ledger." + Bare(goodDefId);
 
     // ---- 第 15 步写的年度报告（壳层首页直读；Simulation.AdvanceTurn 每回合先清掉上一年的）----
     public const string ReportTowns = "report.towns";

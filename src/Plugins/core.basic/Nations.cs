@@ -19,7 +19,12 @@ public static class Nations
     /// 开国库（粮）。占位值：只够付 6 座城的建城费，故意不给多，
     /// 让玩家第一年就撞上「国库见底 ⇒ 开不了新城」这条硬约束（§1.3 的代价看得见）。
     /// </summary>
-    public static readonly Fix StartingTreasuryFood = Fix.FromInt(40);
+    /// <summary>
+    /// 开局国库。P0-3 起建城要同时付 6 石成本 + 8 石仓底划转（§3.8），
+    /// 40 石只够 2 座城；标定改为 60 石（3 座城 + 18 石余量），
+    /// 否则「建三座城」的验收与存档测试会在第三次被拒。
+    /// </summary>
+    public static readonly Fix StartingTreasuryFood = Fix.FromInt(60);
 
     /// <summary><c>nation.found</c>：args = name（可省）、seed（可选：把已有的独立城镇收进来）。</summary>
     public static CommandResult Found(Command cmd, IStepContext ctx)
@@ -50,7 +55,7 @@ public static class Nations
         ctx.Explain(nation.Id, "建国",
             "国库初值 = 占位常数（M2 换成 scenario 数据包）",
             [$"国名 {name}，实体 {nation.Id}",
-             $"国库 {StartingTreasuryFood.Text} 石粮 ≈ 可付 {(long)(StartingTreasuryFood.Raw / TownOps.FoundCostFood.Raw)} 座城的建城费（{TownOps.FoundCostFood.Text} 石/座）",
+             $"国库 {StartingTreasuryFood.Text} 石粮 ≈ 可付 {(long)(StartingTreasuryFood.Raw / (TownOps.FoundCostFood + TownOps.FoundStockFood).Raw)} 次建城（每次成本 {TownOps.FoundCostFood.Text} + 仓底 {TownOps.FoundStockFood.Text} 石）",
              seed.IsEmpty ? "无都城：先用 town.found 建一座独立城镇，再由 UI 指认首都" : $"都城 = {seed}"],
             $"{name}（{nation.Id}）成立");
         ctx.Note($"建国：{name}（{nation.Id}），国库 {StartingTreasuryFood.Text} 石粮");
@@ -78,6 +83,26 @@ public static class Nations
             ctx.Mutate(nation.Id, F.NationCapital, first.Value!, "自动指认：境内最早的城为首都（M1 无选址规则）");
             ctx.Mutate(first, F.TownSovereignty, "core", "首都治权升为 core（§4.1）");
             ctx.Note($"{ctx.GetStr(nation.Id, F.NationName)} 定都 {ctx.GetStr(first, F.TownName)}");
+        }
+    }
+
+    /// <summary>
+    /// §5.9 全局账本的国库快照：第 6 步首把每个国家的每类物资记到 <c>nation.ledger.*</c>，
+    /// 第 10 步末由 <c>basic.conservation</c> 与期末值对账。
+    /// 只算城镇的话，建城/进贡这类跨实体划转在账上看不见（REVIEW-M0-M4 §3.3）。
+    /// </summary>
+    public static void SnapshotLedger(HookArgs args, IStepContext ctx)
+    {
+        if (!SimOrder.At(args, "market_local", SimOrder.SlotPre)) return;
+
+        foreach (var nation in ctx.EntitiesOfKind(F.KindNation))
+        {
+            foreach (var good in ctx.Data.OfType(F.TypeGood))
+            {
+                ctx.Mutate(nation.Id, F.NationLedger(good.Id),
+                    ctx.GetFix(nation.Id, F.NationStock(good.Id), Fix.Zero),
+                    $"§5.9 全局账本：第 6 步国库 {good.GetStr("title")} 快照");
+            }
         }
     }
 }

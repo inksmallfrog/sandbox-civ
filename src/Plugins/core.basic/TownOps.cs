@@ -75,9 +75,14 @@ public static class TownOps
 
         if (!nation.IsEmpty)
         {
+            // §3.8：建城成本与开城仓底都从国库划转。仓底必须<b>划转</b>而不是凭空写进新城，
+            // 否则每建一城就多出 8 石粮（REVIEW-M0-M4 §3.3 的泄漏）。
+            Fix needed = FoundCostFood + FoundStockFood;
             Fix treasury = ctx.GetFix(nation, F.NationStockFood, Fix.Zero);
-            if (treasury < FoundCostFood)
-                return CommandResult.Reject(cmd, $"{nation} 国库只有 {treasury.Text} 石粮，建城要 {FoundCostFood.Text} 石");
+            if (treasury < needed)
+                return CommandResult.Reject(cmd,
+                    $"{nation} 国库只有 {treasury.Text} 石粮，建城要 {FoundCostFood.Text} 石成本 + " +
+                    $"{FoundStockFood.Text} 石仓底 = {needed.Text} 石");
         }
 
         var town = ctx.CreateEntity(F.KindTown, $"在 {hex} 建城（§3.8）");
@@ -102,21 +107,29 @@ public static class TownOps
 
         ctx.Mutate(town.Id, F.TownPop("class.peasant"), FoundPop, $"§3.8：建城即有首批人口 {FoundPop * 100} 人");
         ctx.Mutate(town.Id, F.TownSat("class.peasant"), Fix.FromInt(55), "§4.2 满意度初值：基线 50 加一点新开荒的期待");
-        ctx.Mutate(town.Id, F.TownStock("good.food"), FoundStockFood, "开城仓底，§5.4「先有粮才有人」");
+        ctx.Mutate(town.Id, F.TownStock("good.food"), FoundStockFood,
+            nation.IsEmpty
+                ? "开城仓底（独立城镇，无国库可划转；§5.4「先有粮才有人」）"
+                : $"开城仓底：从 {nation} 国库划转 {FoundStockFood.Text} 石（§3.8，总量不变）");
         ctx.Mutate(town.Id, F.TownGrowth("class.peasant"), Fix.Zero, "人口增长的零头累积：不到 100 人不进位");
         var good = ctx.Data.Get("good.food");
         ctx.Mutate(town.Id, F.TownPrice("good.food"), good.GetFix("basePrice"),
             "§5.3：建城时粮价初始化为基准价 p0 = 4.00 银/石");
 
         if (!nation.IsEmpty)
-            ctx.Add(nation, F.NationStockFood, SimValue.Of(-FoundCostFood), $"§3.8 的建城成本，由 §5.5 的国库支付：{FoundCostFood.Text} 石粮");
+        {
+            ctx.Add(nation, F.NationStockFood, SimValue.Of(-FoundCostFood),
+                $"§3.8 的建城成本，由 §5.5 的国库支付并消耗：{FoundCostFood.Text} 石粮");
+            ctx.Add(nation, F.NationStockFood, SimValue.Of(-FoundStockFood),
+                $"§3.8 的开城仓底，划转给 {name}：{FoundStockFood.Text} 石（不是新建）");
+        }
 
         ctx.Explain(town.Id, "建城",
             $"辖地 = 半径 {ClaimRadius} 内至多 {ClaimMaxTiles} 格（§3.6）",
             [$"城址 {hex}，地表 {landform.GetStr("title")}",
              $"抢占无主格 {claimed} 格（已属他城的不抢）",
-             $"首批 {FoundPop} 个百人单位 = {FoundPop * 100} 人，仓底 {FoundStockFood.Text} 石",
-             $"国库支出 {FoundCostFood.Text} 石粮"],
+             $"首批 {FoundPop} 个百人单位 = {FoundPop * 100} 人，仓底 {FoundStockFood.Text} 石" +
+             (nation.IsEmpty ? "（独立城镇自备）" : $"（从国库划转，成本另计 {FoundCostFood.Text} 石）")],
             $"{name}（{town.Id}）建在 {hex}，辖地 {tiles} 格");
         ctx.Note($"建城：{name} @ {hex}（{landform.GetStr("title")}），辖地 {tiles} 格");
         // ExecutionRate = 1.00：M1 没有行政瓶颈（§7.5），上令即下达。M5 起这里会打折。
@@ -372,10 +385,16 @@ public static class TownOps
     }
 
     /// <summary>城镇总人口（百人单位）。遍历 pop.* 前缀，阶级加了也不用改这里。</summary>
+    /// <summary>
+    /// 全阶级人口合计（§4.5）。只按数据里的阶级定义求和——<b>不能</b>用
+    /// <c>Prefix("town.pop.")</c> 扫，否则会把派生字段 <c>town.pop.total</c> 自己也加进去，
+    /// 第 13 步写回时变成 4 → 8 → 12 的自我累加。
+    /// </summary>
     public static long TotalPop(IStepContext ctx, EntityId town)
     {
         long sum = 0;
-        foreach (var kv in ctx.World.Get(town)!.Prefix("town.pop.")) sum += kv.Value.AsInt();
+        foreach (var cls in ctx.Data.OfType(F.TypeClass))
+            sum += ctx.GetInt(town, F.TownPop(cls.Id));
         return sum;
     }
 

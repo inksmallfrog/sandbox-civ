@@ -507,6 +507,12 @@ public static class SeasonRules
         }
 
         Convert(town, ctx);
+
+        // §4.5/§5.9：写全阶级人口合计。转换只搬人不造人，Σ 阶级 == 总数 必须恒成立，
+        // basic.population 不变量在第 13 步末校验它（REVIEW-M0-M4 §3.3）。
+        long popTotal = TownOps.TotalPop(ctx, town);
+        ctx.Mutate(town, F.TownPopTotal, popTotal,
+            $"§4.5 全阶级人口合计 {popTotal} 个百人单位（第 13 步末，供人口守恒不变量读）");
     }
 
     /// <summary>

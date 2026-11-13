@@ -54,7 +54,7 @@ src/Plugins/core.basic/ 参考规则包：10 个 .cs + manifest.json（M1–M4 �
 src/HexaCiv.Cli/       无头壳层（sim：Program / Runner / Script / AsciiMap）
 src/GodotShell/        窗口壳层（Main.cs / HexView.cs / Main.tscn / project.godot）
 data/                  _schema.json + core.basic/*.json（数值只住在这里）
-tests/SimCore.Tests/   xUnit，100 条
+tests/SimCore.Tests/   xUnit，102 条
 scripts/               demo.txt（命令脚本）、godot-smoke.txt（跨宿主对账脚本）
 analysis/out/          基线 CSV（gitignore，**是产物不是现状**）
 saves/                 回归样本档（.bin 被 ignore，只留 .gitkeep）
@@ -104,7 +104,7 @@ build/plugins/         core.basic.dll 的落点，宿主从这里装（gitignore
 
 ```bash
 dotnet build -v q --nologo                  # 必须 0 错误（警告 = 错误）
-dotnet test --nologo                        # 100 绿，0 跳过
+dotnet test --nologo                        # 102 绿，0 跳过
 dotnet run --project src/HexaCiv.Cli -- check                      # 数据包 + 清单 + 15 步 + 21 落点全表
 dotnet run --project src/HexaCiv.Cli -- hash  --seed 99 --turns 50  # 确定性自检
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5 --turns 20 --at 12
@@ -116,9 +116,9 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 
 | 命令 | 期望 |
 |---|---|
-| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `fc88ca36ce90fb37`，**且必须与 Godot 冒烟同值** |
+| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `4983eb54fb4de27a`，**且必须与 Godot 冒烟同值**（D-043 新增字段后重测） |
 | `… replay --seed 5 --turns 20 --at 12` | 快照往返 `e9962eacb7b9402b`；续跑 = 一口气跑满 `1bf10ff00577dfca` |
-| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 112 / 最低满意 37.16 / hash `4f3cad2796a670fa`（D-042 改按需求比例配给后重测；旧值 `c627c4d01388e426` 已作废） |
+| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 112 / 最低满意 37.16 / hash `73077833df98cffb`（D-043 重测；更早的 `c627c4d01388e426`、`4f3cad2796a670fa` 已作废） |
 | `… check` | `dataHash 495c26d59b6e2362`，15 步、21 落点（**7 个不落在任何步骤**） |
 
 `dotnet test` 不覆盖跨宿主一致性：改过 `src/GodotShell/Main.cs` 的 `Smoke()` 参数，
@@ -162,7 +162,7 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 | SimCore | 九项职责全部实现（世界存储 / 15 步调度 / 分层 RNG / 数据注册 / 不变量 / 因果链 / 命令流 / 存档回放迁移 / 插件宿主）+ 同步层与分块哈希铺好接缝 | `AI_HANDOFF.md` §2.1、`ROADMAP.md` §2.2 |
 | core.basic | 32×20 矩形六边形图（§3.7 六步：高度/温度/降水/九类地表 + §3.1 水体 + §3.3 河网 + §3.4 十二形胜 + §3.5 五种门槛资源 + 骨架雕刻）+ 建国 → 建城 → 开荒/起仓 → **八阶级产出循环（公式一，含 §4.2 罚则与 §4.3 原料约束）** → **多商品价格（公式二，除 silver 外 4 种）** → 消耗 → 配给 → 满意度（公式三 + **状态机五档 + 分阶级反抗 + 暴动倒计时**）→ 人口增长（含 §4.7 拥挤）→ **解锁闸门（§4.4）与阶级转化（§4.7）** → 不安计数 → 年报；**三条公式已全部实装**；守恒等式（§5.9 第一条，循环所有商品）与价格区间不变量已注册 | `BALANCE.md` §1/§3/§4/§5 |
 | 壳层 | CLI 6 动词 + `--layer` 五图层；Godot 窗口（绘制 / 拾取 / 侧栏 / 年报 / 640 格全格拾取自检；河网、水体、形胜标记、资源与人口图层） | `ROADMAP.md` §2 |
-| 测试 | 100 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 38 / 形胜与资源 16 / 验收 14（含 D-042 新增 3 条配给测试） | `TEST_PLAN.md` §2 |
+| 测试 | 102 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 40 / 形胜与资源 16 / 验收 14（含 D-042 配给 3 条、D-043 守恒 2 条） | `TEST_PLAN.md` §2 |
 | 文档 | §11.1 要求的 13 份全部落地（GDD 之外 12 份 + REQUIREMENTS）+ 本文件 | `ROADMAP.md` §2.1 |
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
