@@ -168,8 +168,9 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
    本仓库已经有一次结论被旧 CSV 带偏。
 6. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
 7. **分支仍叫 `master`，CI 尚待远端首验**：当前已有 `origin` remote，但双系统工作流实际全绿前，任何「CI 绿」的主张都没有证据基础。
-8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 已改为整数定点和整数平方根，地图形状为 32×20 矩形，
-   `CoreInfo.MapGenVersion=3`；本机（宿主 #1）CLI 复验通过，Godot 4.7.2 冒烟因该机未装对应引擎尚未执行。
+8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 用整数定点与整数平方根，地图形状为 32×20 矩形，
+   `CoreInfo.MapGenVersion=3`；宿主 #1 上 CLI 与 Godot 4.7.2 smoke 同为 `e0909883c6019fba`，
+   CI 首验要在 ubuntu + windows 上复核同种子地图哈希。
 
 ## 11. 下一项任务（按顺序，不跳队）
 

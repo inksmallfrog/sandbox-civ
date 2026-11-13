@@ -22,9 +22,11 @@
 
 ## 1. 仓库实况（2026-11-13 当场核对）
 
-> 宿主 #1 复核（2026-11-13）：.NET SDK 10.0.201（共享运行时含 8.0.25），`dotnet build/test/check/hash/replay` 全通过；
-> 该机**未安装 Godot 4.7.2 .NET**（只有旧的 4.6.1 mono），所以本轮 Godot smoke 未执行，跨宿主对账仍以 Windows #2 / CI 为准。
-> 地图形状已从半径制改为 32×20 矩形，MapGenVersion 升到 3。新基线见下表；旧半径制地图的哈希全部作废，这是 §3.7 明写的地图重排。
+> 宿主 #1 复核（2026-11-13）：.NET SDK 10.0.201（共享运行时含 8.0.25）；Godot .NET 4.7.2 位于
+> `E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`。构建、63 条测试、
+> `check/hash/replay`、200 年基线与 Godot `-- --smoke` 全部通过；CLI 与 Godot 末态哈希同为 `e0909883c6019fba`，
+> Godot 输出 `SMOKE PASS`、拾取 1920/1920。地图形状已从半径制改为 32×20 矩形，MapGenVersion 升到 3；
+> 新基线见下表，旧半径制地图的哈希全部作废（§3.7 明写的地图重排）。跨 OS 仍待 CI。
 
 | 项 | 值 | 复现 |
 |---|---|---|
@@ -32,7 +34,7 @@
 | 工作区 | 本轮 M2 切片一改动（地图骨架 + 文档 + 规则）随 D-033 提交；以 status 为准 | `git status --short` |
 | 测试 | **63 绿，0 跳过** | `dotnet test --nologo` |
 | 确定性自检 | `856535a916aa2e20`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
-| 跨宿主末回合哈希 | `e0909883c6019fba`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`）；**本机只验了 CLI，Godot 待 #2/CI** | `sim hash` 与 Godot `-- --smoke` |
+| 跨宿主末回合哈希 | `e0909883c6019fba`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值；`SMOKE PASS`，拾取 1920/1920 |
 | 快照往返 | `2b4879a4f1de53f9`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
 | 续跑等价 | `49b257e9a5ce3fe4`（一口气跑满 = 存盘续跑） | 同上 |
 | 200 年基线 | seed 42 末态 `8ff2b81f535a32b6`，`dataHash af324b5a33571234`，2 城 / 人口 174 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` |
@@ -206,7 +208,8 @@ smoke 会打 `FallbackFont=FontFile FallbackFontSize=16`。没装 CJK 字体的�
 
 **坑 18 — 地图生成曾用浮点中间量（已修复）。** `MapGen.Bootstrap` 以整数定点噪声与整数平方根写入 `hex.height` / `hex.landform`；
 M2 切片一把形状改为 32×20 矩形并把 `CoreInfo.MapGenVersion` 升到 3，旧半径制地图的哈希全部重排（预期行为）。
-Windows #2 曾在 MapGenVersion=2 下验证 CLI/Godot 同哈希；MapGenVersion=3 的跨宿主对账待宿主 #2 或 CI 补。
+Windows #2 曾在 MapGenVersion=2 下验证 CLI/Godot 同哈希；MapGenVersion=3 已在宿主 #1 用 Godot 4.7.2 复验同哈希
+（`e0909883c6019fba`，`SMOKE PASS`），跨 OS 对账仍待 CI。
 
 ---
 

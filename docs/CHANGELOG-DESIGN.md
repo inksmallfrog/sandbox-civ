@@ -245,7 +245,7 @@
 
   | 场景 | 半径制 61 格（MapGenVersion=2） | 32×20（MapGenVersion=3） |
   |---|---|---|
-  | seed 7 / 6 回合 | `1cd6f74b25e33aa3` | `e0909883c6019fba`（仅 CLI 当场复验；本宿主无 Godot 4.7.2） |
+  | seed 7 / 6 回合 | `1cd6f74b25e33aa3` | `e0909883c6019fba`（宿主 #1 CLI 与 Godot 4.7.2 smoke 同值，`SMOKE PASS`） |
   | seed 99 / 50 回合 | `e6c324ac3bcfbe3b` | `856535a916aa2e20` |
   | seed 5 / 第 12 回合快照 | `9b82e9599ae198cd` | `2b4879a4f1de53f9` |
   | seed 5 / 20 回合续跑 | `482c8643eada3e64` | `49b257e9a5ce3fe4`（续跑与直跑相同） |
@@ -254,7 +254,8 @@
 - 确定性证据：63 条测试全绿（新增 `地图是32乘20且id与轴坐标互证`、`同种子同图换种子换图`、
   `建图落在M2性能预算内`）；`sim map --seed 7` 建图 34.7 ms（判据 < 1000 ms）。
 - 影响：所有地图相关基线哈希与 200 年轨迹整表换值（`BALANCE.md` §4 已重跑）；
-  `Siting.BestTownSite` 与命令面未动，`scripts/*.txt` 无需改。跨宿主对账（Godot `SMOKE PASS`）待宿主 #2 / CI 补。
+  `Siting.BestTownSite` 与命令面未动，`scripts/*.txt` 无需改。CLI 与 Godot 4.7.2 已在宿主 #1 对账同哈希；
+  跨 OS 对账仍待 CI。
 
 ---
 
