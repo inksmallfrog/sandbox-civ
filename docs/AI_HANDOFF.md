@@ -11,7 +11,7 @@
 ## 0. 一分钟版
 
 - **M1 Core 已经立住，M0 只差 CI 首次远端双系统全绿**。三 job × ubuntu/windows 的工作流已补；60 条测试与 Windows 宿主 #2 的基线当场复验过（§1 表格）。
-- **接手第一件事不是写代码，是跑 §6 那五条命令**。有对不上的，先修环境再动代码——
+- **接手第一件事不是写代码，是识别宿主并跑 §6 的复验命令**。按 `DEV_ENVIRONMENTS.md` 探测 OS、.NET SDK 与 Godot .NET 版本；有对不上的，先修环境再动代码——
   这个仓库的正确性主张全靠「同种子同命令流 → 同哈希」撑着，跑不出来时任何改动都无法判断好坏。
 - **读的顺序（§11.4 原文）**：本文件 → `AGENTS.md` → GDD §10 + 附录 A → 要动的子系统章节。
   `AGENTS.md` 里那八条架构原则是本仓库的地契，违反其中任意一条的提交应当被打回，而不是被合并后再修。
@@ -22,11 +22,11 @@
 
 ## 1. 仓库实况（2026-11-13 当场核对）
 
-> 新宿主复核（2026-11-13）：.NET SDK 8.0.428 位于 `C:\Program Files\dotnet\dotnet.exe`；本次通过完整路径运行。
+> Windows 宿主 #2 复核（2026-11-13）：.NET SDK 8.0.428 位于 `C:\Program Files\dotnet\dotnet.exe`；本次通过完整路径运行。
 > `.slnx` 在该 SDK 不受支持，已换成 `HexaCiv.sln`。根解决方案 build 0 警告/错误、60 测试全绿；CLI `check` / hash / replay、
 > 空世界 1000 回合、200 年基线与 Godot .NET 4.7.2 smoke 均通过。地图噪声已改为整数定点，MapGenVersion=2。
 > 新基线见下表。`.github/workflows/ci.yml` 已补齐三 job × ubuntu/windows，下载地址与 YAML 结构已检查，Windows 宿主 #2 已按同步骤复验；
-> 但远端首跑尚未执行，跨 OS 仍未验证，M0 保持 🟡。
+> 但远端首跑尚未执行，跨 OS 仍未验证，M0 保持 🟡。三台开发机的识别和状态见 `DEV_ENVIRONMENTS.md`；宿主 #1 的当前工具链需复核，Mac 宿主尚未探测。
 
 | 项 | 值 | 复现 |
 |---|---|---|
@@ -104,7 +104,7 @@ D-020 是这次会话里唯一的**行为变更**：`SeasonRules.Demography` 里
 | # | 事 | 判据 | 记录在哪 |
 |---|---|---|---|
 | 1 | **CI 首验**（工作流已补，M0 只剩实际运行证据） | 推送后三个 job 在 ubuntu + windows 上都绿；把首个 Linux 哈希写回文档；M0 才打 `v0.0` | `TEST_PLAN.md` §6 |
-| 2 | 根 `Readme.md` 重写（需求原文已在 `docs/REQUIREMENTS.md`） | 玩家视角：一条命令跑起来 + 一张截图 + 指回 `AGENTS.md` | `CHANGELOG-DESIGN.md` D-004 |
+| 2 | 根 `Readme.md` 已补齐；三台宿主探测指南见 `DEV_ENVIRONMENTS.md` | 玩家视角：一条命令跑起来 + 一张截图 + 指回 `AGENTS.md`；主机 #1 与 Mac 的工具链信息待首次实测补录 | `CHANGELOG-DESIGN.md` D-004 |
 | 3 | tag `v0.0`（M0）/ `v0.1`（M1）+ `master` → `main` 改名 | §11.2 的 tag 表；`v0.2` 的语义冲突挂在 D-001 | `CHANGELOG-DESIGN.md` §1 |
 | 4 | **M2 地图**：32×20 矩形、河网 / 形胜 / 门槛资源、bootstrap 计时 | §3.7 六步全跑 + 三条验收各给得出证据 | `ROADMAP.md` §3 |
 | 5 | M2 的三条接口前置改动（半径制 → 矩形、`CoreInfo.MapGenVersion` +1、只改 `Siting`） | 旧种子旧图必须仍然可复现，或明确记录重排 | `ROADMAP.md` §3 |
@@ -213,7 +213,7 @@ dotnet test --nologo                                # 60 绿
 dotnet build src/GodotShell/HexaCiv.GodotShell.csproj # GodotShell 不在 solution，单独编译以免加载旧 DLL
 dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
 dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12
-& 'D:\Applications\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe' --headless --path src/GodotShell -- --smoke # 需 Godot .NET 4.7.2 与 .NET SDK
+godot --headless --path src/GodotShell -- --smoke # 需 Godot .NET 4.7.2 与 .NET SDK；若不在 PATH，按 DEV_ENVIRONMENTS.md 调用
 ```
 
 `sim check` 顺手跑一下：它同时校验数据包、清单、15 步表与 21 个落点表，是「文档与实现有没有分叉」的最快探针。

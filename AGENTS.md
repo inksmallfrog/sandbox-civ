@@ -3,6 +3,7 @@
 > 谁该读：任何要动这个仓库的 AI 或人，**在写第一行代码之前**。
 > GDD §11.4 规定的开工顺序就是本节引用的顺序：本文件 → [`docs/AI_HANDOFF.md`](docs/AI_HANDOFF.md) §0 与 §5
 > → [`docs/GDD.md`](docs/GDD.md) §10 + 附录 A → 要动的子系统章节。
+> 开始前还要按 [`docs/DEV_ENVIRONMENTS.md`](docs/DEV_ENVIRONMENTS.md) 探测当前宿主；不要假定路径、操作系统或工具已配置。
 > 本文件只写「不许做什么」和「怎么验」。**规则内容的唯一来源是 GDD**，这里不重抄。
 
 ---
@@ -26,8 +27,8 @@
 
 | 项 | 值 | 出处 |
 |---|---|---|
-| 引擎 | Godot **4.7.2 .NET**（当前宿主：`D:\Applications\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`） | ADR-001；2026-11-13 用户提供 |
-| ⚠️ | Godot C# 验收必须使用 .NET 版引擎，且机器必须安装 .NET SDK；判据是输出 `SMOKE PASS`，不能只看退出码 | 当前宿主 Godot .NET 4.7.2 + .NET SDK 8.0.428 已复验，详见 `AI_HANDOFF.md` §1 |
+| 引擎 | Godot **4.7.2 .NET**（具体安装路径因宿主而异） | ADR-001；宿主清单见 [`docs/DEV_ENVIRONMENTS.md`](docs/DEV_ENVIRONMENTS.md) |
+| ⚠️ | Godot C# 验收必须使用与项目 SDK 匹配的 .NET 版引擎，且机器必须安装 .NET SDK；判据是输出 `SMOKE PASS`，不能只看退出码 | 各宿主探测与复验记录见 [`docs/DEV_ENVIRONMENTS.md`](docs/DEV_ENVIRONMENTS.md) |
 | 运行时 | .NET **net8.0**（与 GodotSharp `lib/net8.0` 对齐） | ADR-002 |
 | 语言 | C# **LangVersion 12**、`Nullable enable`、`ImplicitUsings enable` | [`Directory.Build.props`](Directory.Build.props) |
 | 编译 | **`TreatWarningsAsErrors = true`**（只豁免 `NU1503`）——警告就是失败 | 同上 |
@@ -41,7 +42,7 @@ AGENTS.md              本文件
 Directory.Build.props  net8.0 / C#12 / Nullable / 警告即错误 / RepoRoot
 HexaCiv.sln            SimCore + core.basic + sim + tests（GodotShell 刻意不在里面）
 .github/workflows/ci.yml 三 job × ubuntu + windows；godot-smoke 强制核对 SMOKE PASS 与哈希
-docs/                  GDD.md（唯一规则来源）+ §11.1 要求的另外 12 份 + REQUIREMENTS.md
+docs/                  GDD.md（唯一规则来源）+ §11.1 要求的文档 + REQUIREMENTS.md + DEV_ENVIRONMENTS.md
 src/SimCore/           内核：20 个 .cs，引擎无关，一条玩法规则都没有
 src/Plugins/core.basic/ 参考规则包：7 个 .cs + manifest.json（M1 的全部规则都在这一层）
 src/HexaCiv.Cli/       无头壳层（sim：Program / Runner / Script / AsciiMap）
@@ -102,7 +103,7 @@ dotnet run --project src/HexaCiv.Cli -- check                      # 数据包 +
 dotnet run --project src/HexaCiv.Cli -- hash  --seed 99 --turns 50  # 确定性自检
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5 --turns 20 --at 12
 dotnet run --project src/HexaCiv.Cli -- run --no-plugins --no-data --turns 1000 --quiet   # Core 空跑
-& 'D:\Applications\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe' --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需先安装 .NET SDK
+godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .NET 4.7.2 和 .NET SDK，若不在 PATH 按 DEV_ENVIRONMENTS.md 调用
 ```
 
 当场复验过的期望值（2026-11-13，改数值后这些会漂，漂了要连同文档一起改）：

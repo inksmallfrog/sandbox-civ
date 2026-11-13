@@ -50,6 +50,7 @@
 sandbox-civ/
   Readme.md              怎么跑（人类入口）
   AGENTS.md              后续 AI 的最高优先级工作说明（§11.1）
+  docs/DEV_ENVIRONMENTS.md 三台开发宿主的探测和快速启动说明
   Directory.Build.props  net8.0 / LangVersion 12 / Nullable / TreatWarningsAsErrors / RepoRoot
   HexaCiv.sln            SimCore + core.basic + sim + tests（Godot 壳层刻意不在里面，见 §6）
   docs/                  GDD.md（唯一规则来源，AI 不得自行修改）+ §11.1 要求的另外 12 份 + REQUIREMENTS.md + history/ + screenshots/
