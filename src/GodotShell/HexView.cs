@@ -52,7 +52,7 @@ public partial class HexView : Node2D
 
     /// <summary>
     /// 城名用 <see cref="Label"/> 子节点画，不用 <c>DrawString</c>。理由不是审美，是当场量到的：
-    /// 本机的 Godot 4.6.1(mono) 里 <c>ThemeDB.FallbackFont</c> 非空、<c>FallbackFontSize=16</c>，
+    /// 原开发机的 Godot 4.6.1(.NET) 里 <c>ThemeDB.FallbackFont</c> 非空、<c>FallbackFontSize=16</c>，
     /// 但 <c>DrawString(font, pos, text, align, fontSize: 15, …)</c> 每格都报
     /// <c>Condition "p_size &lt;= 0"</c>（headless 与窗口模式都报，与传进去的 15 无关）；
     /// 同一个 TextServer 画 HUD 的 Label / RichTextLabel 却一直是好的——出问题的是 DrawString 这条取字号的路径。

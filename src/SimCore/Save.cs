@@ -90,7 +90,7 @@ public static class SaveStore
         {
             SchemaVersion = CoreInfo.SchemaVersion,
             GameVersion = CoreInfo.GameVersion,
-            MapGenVersion = CoreInfo.MapGenVersion,
+            MapGenVersion = checked((int)sim.World.GetInt(World.GlobalId, "meta.mapGenVersion", CoreInfo.MapGenVersion)),
             WorldSeed = sim.Rng.WorldSeed,
             Turn = sim.Time.Turn,
             YearBase = sim.Time.YearBase,

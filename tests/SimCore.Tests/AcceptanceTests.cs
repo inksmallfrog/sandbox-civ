@@ -195,6 +195,20 @@ public class AcceptanceTests
     }
 
     [Fact]
+    public void 旧地图档读回再存仍保留原生成器版本()
+    {
+        var original = Open(42);
+        original.World.WriteRaw(World.GlobalId, "meta.mapGenVersion", SimValue.OfInt(1));
+        SaveGame oldMapSave = original.CaptureSave();
+        Assert.Equal(1, oldMapSave.MapGenVersion);
+
+        var resumed = Open(42);
+        resumed.ApplySave(oldMapSave);
+        Assert.Equal(1, resumed.CaptureSave().MapGenVersion);
+        Assert.Equal(1, resumed.World.GetInt(World.GlobalId, "meta.mapGenVersion"));
+    }
+
+    [Fact]
     public void 坏档不得覆盖最后一个有效存档()
     {
         using var tmp = new TmpDir("save-safety");

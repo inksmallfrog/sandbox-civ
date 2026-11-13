@@ -201,6 +201,30 @@
   `ARCH.md` 的目录树里还留着 58，也已改。这类数不像引用错误那样无害——「7 个落点没有步骤」
   直接决定 bootstrap 类 hook 该在哪儿门闸，写少了会让人以为 `OnLoad` 有地方挂。
 
+### D-031 solution 格式改为兼容 .NET 8 SDK
+
+- 日期：2026-11-13 / 类型：结构 / 状态：已实现
+- 改了什么：以 `HexaCiv.sln` 替换 `HexaCiv.slnx`，仍包含 SimCore、core.basic、CLI 与测试项目；GodotShell 继续单独构建。
+- 为什么：当前项目目标为 net8.0，宿主安装 SDK 8.0.428；该 SDK 无法解析 `.slnx`，导致文档要求的根目录 `dotnet build` 失败。
+- 影响：无运行时或哈希影响；根目录 build/test 可使用已安装 SDK。复核通过根 solution build 与 60 条测试。
+
+### D-032 地图噪声改为整数定点
+
+- 日期：2026-11-13 / 类型：结构 + 确定性 / 状态：已实现，已重跑回归
+- 改了什么：`MapGen` 的噪声插值、外环高度及平方根改用百万分之一整数定点和整数平方根；`CoreInfo.MapGenVersion` 从 1 升至 2；`CaptureSave` 从快照的 `meta.mapGenVersion` 保留原地图版本，旧地图档读回再存不冒充新生成器。
+- 为什么：旧实现以 `double` 中间量生成 `hex.height` 与 `hex.landform`，这些字段进入世界哈希，违反 `AGENTS.md` 的定点纪律，也没有跨平台舍入保证。
+- 存档：地图保存在快照中，现有档读回不重新生成地图；schema 未变，无迁移器需要。
+- 模拟差异（数据包未变，dataHash 仍为 `af324b5a33571234`）：
+
+  | 场景 | 原地图算法 | 整数算法 |
+  |---|---|---|
+  | seed 7 / 6 回合 | `3c72a09ae26803e9` | `1cd6f74b25e33aa3`（CLI 与 Godot 4.7.2 相同） |
+  | seed 5 / 第 12 回合快照 | `3a0d8ef70410ba0a` | `9b82e9599ae198cd` |
+  | seed 5 / 20 回合续跑 | `511b3328ad7ee58e` | `482c8643eada3e64`（续跑与直跑相同） |
+  | seed 42 / 200 回合 | `36c3463658b99a90` | `66769b250054b11e`（仍为 2 城 / 人口 89） |
+
+- 确定性证据：60 条测试全绿，包含旧地图版本保存回归；CLI 与 Godot smoke 输出同一逐回合终态哈希；跨 OS 仍待 CI 验证。
+
 ---
 
 ## 5. 逻辑量盘点（§12 推进规则第 2 条：只增不减视为失控信号）
@@ -215,10 +239,10 @@ dotnet run --project src/HexaCiv.Cli -- check | head -3
 
 | 量 | M0 + M1（2026-11-13） | 怎么数出来的 |
 |---|---:|---|
-| SimCore 文件 / 行 | 20 / 3884 | `find src/SimCore -name '*.cs'`（不含 `obj/` 生成物） |
-| `core.basic` 文件 / 行 | 7 / 1158 | 同上 |
-| CLI 壳层 / Godot 壳层 行 | 718 / 739 | 壳层合计 1457 行，**里面一条规则都没有**（§10.2） |
-| 测试行 / 条数 | 1298 / 59 | `dotnet test --list-tests` |
+| SimCore 文件 / 行 | 20 / 3404 | `find src/SimCore -name '*.cs'`（不含 `obj/` 生成物） |
+| `core.basic` 文件 / 行 | 7 / 1027 | 同上 |
+| CLI 壳层 / Godot 壳层 行 | 646 / 642 | 壳层合计 1288 行，**里面一条规则都没有**（§10.2） |
+| 测试行 / 条数 | 1153 / 60 | `dotnet test --list-tests` |
 | 数据文件 / 记录 | 5 / 14 | `data/_schema.json` + `data/core.basic/*.json`（地表 5、物资 5、建筑 3、阶级 1） |
 | 结算步 | 15 | §2.3 写死，`sim check` 打印的表 |
 | hook 落点 | 21（其中 7 个不落在任何步骤） | `SimOrder.DescribeHookMap()` |
@@ -228,6 +252,6 @@ dotnet run --project src/HexaCiv.Cli -- check | head -3
 | 不变量 | 1（`basic.ranges`）+ Core 侧的 reason/顺序自检 | `BasicPlugin.cs:83` |
 | 图层声明 | 3 / 9 | `terrain` `owner` `agriculture`，§3.9 要 9 层 |
 
-**判读**：M1 的规则条目集中在一个 1158 行的参考插件里，Core 侧没有增加任何玩法分支。
+**判读**：M1 的规则条目集中在一个 1027 行的参考插件里，Core 侧没有增加任何玩法分支。
 下一次盘点在 M2 结束时做，重点看两个数：SimCore 行数（**不该因为加内容而涨**，
 涨了说明有人把规则塞进内核）与 `core.basic` 行数（涨是预期内的，但单文件超过 ~1200 行就该拆插件）。

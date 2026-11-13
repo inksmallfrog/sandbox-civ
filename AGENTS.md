@@ -26,8 +26,8 @@
 
 | 项 | 值 | 出处 |
 |---|---|---|
-| 引擎 | Godot **4.x mono**（本机可用：`/e/programs/godot-editor-windows-mono/godot-4.2-4.6.1-stable-mono.exe`） | ADR-001 |
-| ⚠️ | 同机的 **非 mono** 4.6.2 正式版跑 C# 会**什么都不打印且退出码 0**——判据是 `SMOKE PASS` 这行，不是 `$?` | 当场验过 |
+| 引擎 | Godot **4.7.2 .NET**（当前宿主：`D:\Applications\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`） | ADR-001；2026-11-13 用户提供 |
+| ⚠️ | Godot C# 验收必须使用 .NET 版引擎，且机器必须安装 .NET SDK；判据是输出 `SMOKE PASS`，不能只看退出码 | 当前宿主 Godot .NET 4.7.2 + .NET SDK 8.0.428 已复验，详见 `AI_HANDOFF.md` §1 |
 | 运行时 | .NET **net8.0**（与 GodotSharp `lib/net8.0` 对齐） | ADR-002 |
 | 语言 | C# **LangVersion 12**、`Nullable enable`、`ImplicitUsings enable` | [`Directory.Build.props`](Directory.Build.props) |
 | 编译 | **`TreatWarningsAsErrors = true`**（只豁免 `NU1503`）——警告就是失败 | 同上 |
@@ -39,14 +39,14 @@
 Readme.md              人类入口：怎么跑起来
 AGENTS.md              本文件
 Directory.Build.props  net8.0 / C#12 / Nullable / 警告即错误 / RepoRoot
-HexaCiv.slnx           SimCore + core.basic + sim + tests（GodotShell 刻意不在里面）
+HexaCiv.sln            SimCore + core.basic + sim + tests（GodotShell 刻意不在里面）
 docs/                  GDD.md（唯一规则来源）+ §11.1 要求的另外 12 份 + REQUIREMENTS.md
 src/SimCore/           内核：20 个 .cs，引擎无关，一条玩法规则都没有
 src/Plugins/core.basic/ 参考规则包：7 个 .cs + manifest.json（M1 的全部规则都在这一层）
 src/HexaCiv.Cli/       无头壳层（sim：Program / Runner / Script / AsciiMap）
 src/GodotShell/        窗口壳层（Main.cs / HexView.cs / Main.tscn / project.godot）
 data/                  _schema.json + core.basic/*.json（数值只住在这里）
-tests/SimCore.Tests/   xUnit，59 条
+tests/SimCore.Tests/   xUnit，60 条
 scripts/               demo.txt（命令脚本）、godot-smoke.txt（跨宿主对账脚本）
 analysis/out/          基线 CSV（gitignore，**是产物不是现状**）
 saves/                 回归样本档（.bin 被 ignore，只留 .gitkeep）
@@ -96,21 +96,21 @@ build/plugins/         core.basic.dll 的落点，宿主从这里装（gitignore
 
 ```bash
 dotnet build -v q --nologo                  # 必须 0 错误（警告 = 错误）
-dotnet test --nologo                        # 59 绿，0 跳过
+dotnet test --nologo                        # 60 绿，0 跳过
 dotnet run --project src/HexaCiv.Cli -- check                      # 数据包 + 清单 + 15 步 + 21 落点全表
 dotnet run --project src/HexaCiv.Cli -- hash  --seed 99 --turns 50  # 确定性自检
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5 --turns 20 --at 12
 dotnet run --project src/HexaCiv.Cli -- run --no-plugins --no-data --turns 1000 --quiet   # Core 空跑
-godot --headless --path src/GodotShell -- --smoke                   # 要 mono 版；看 SMOKE PASS
+& 'D:\Applications\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe' --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需先安装 .NET SDK
 ```
 
 当场复验过的期望值（2026-11-13，改数值后这些会漂，漂了要连同文档一起改）：
 
 | 命令 | 期望 |
 |---|---|
-| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `3c72a09ae26803e9`，**且必须与 Godot 冒烟同值** |
-| `… replay --seed 5 --turns 20 --at 12` | 快照往返 `3a0d8ef70410ba0a`；续跑 = 一口气跑满 `511b3328ad7ee58e` |
-| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 89 / hash `36c3463658b99a90` |
+| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `1cd6f74b25e33aa3`，**且必须与 Godot 冒烟同值** |
+| `… replay --seed 5 --turns 20 --at 12` | 快照往返 `9b82e9599ae198cd`；续跑 = 一口气跑满 `482c8643eada3e64` |
+| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 89 / hash `66769b250054b11e` |
 | `… check` | `dataHash af324b5a33571234`，15 步、21 落点（**7 个不落在任何步骤**） |
 
 `dotnet test` 不覆盖跨宿主一致性：改过 `src/GodotShell/Main.cs` 的 `Smoke()` 参数，
@@ -123,8 +123,8 @@ godot --headless --path src/GodotShell -- --smoke                   # 要 mono �
 - **关键任务完成时就提交**，不许攒到最后统一提交（设计者的硬约束，回滚粒度是交付要求的一部分）。
 - **提交前跑测试**；不许隐藏失败测试、不许删测试绕过错误；**一个提交只做一件事**；不覆盖他人未提交代码。
 - **分支**：`main`（可发布）/ `develop`（集成）/ `feature/*`（短命）（§11.2）。
-  现在本地只有一个 `master` 且无 remote；切 `main` 的三步计划在 `CHANGELOG-DESIGN.md` **D-002**，
-  要推 GitHub 时一起做，**不要另立口径**。
+  当前检出 `master` 且跟踪 `origin/master`，remote 为 `origin`；D-002 的改名计划是在此状态下写的。
+  改分支前先核对 remote 与工作树，避免照搬旧的「无 remote」记录。
 - **tag**：§11.2 与 §12 对 `v0.2` 及以上给了**两套互斥的含义**（挂在 **D-001 待裁决**）。
   重叠区间只有 `v0.0`（M0 骨架）与 `v0.1`（Core 可运行），两边一致——**只在这两个区间打 tag**，
   裁决前不许打 `v0.2`。
@@ -144,7 +144,7 @@ godot --headless --path src/GodotShell -- --smoke                   # 要 mono �
 | SimCore | 九项职责全部实现（世界存储 / 15 步调度 / 分层 RNG / 数据注册 / 不变量 / 因果链 / 命令流 / 存档回放迁移 / 插件宿主）+ 同步层与分块哈希铺好接缝 | `AI_HANDOFF.md` §2.1、`ROADMAP.md` §2.2 |
 | core.basic | 半径制六边形图（§3.7 前两步）→ 建国 → 建城 → 开荒/起仓 → 产粮（公式一）→ 消耗 → 配给 → 满意度（公式三）→ 人口 → 不安计数 → 年报；**2/3 条公式** | `BALANCE.md` §1/§3/§4 |
 | 壳层 | CLI 6 动词 + 选项集；Godot 窗口（绘制 / 拾取 / 侧栏 / 年报 / 183 拾取命中全对） | `ROADMAP.md` §2 |
-| 测试 | 59 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 14 / 验收 13 | `TEST_PLAN.md` §2 |
+| 测试 | 60 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 14 / 验收 14 | `TEST_PLAN.md` §2 |
 | 文档 | §11.1 要求的 13 份全部落地（GDD 之外 12 份 + REQUIREMENTS）+ 本文件 | `ROADMAP.md` §2.1 |
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
@@ -158,7 +158,8 @@ godot --headless --path src/GodotShell -- --smoke                   # 要 mono �
 5. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
    本仓库已经有一次结论被旧 CSV 带偏。
 6. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
-7. **无 remote、分支还叫 `master`**，所以 CI 落地前任何「CI 绿」的主张都还没有证据基础。
+7. **分支仍叫 `master`，CI 工作流缺失**：当前已有 `origin` remote，但 CI 落地前任何「CI 绿」的主张都还没有证据基础。
+8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 已改为整数定点和整数平方根，`CoreInfo.MapGenVersion=2`，Windows CLI/Godot 对账通过；CI 落地后要在 ubuntu + windows 上复核同种子地图哈希。
 
 ## 11. 下一项任务（按顺序，不跳队）
 

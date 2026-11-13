@@ -10,8 +10,8 @@
 
 ## 0. 一分钟版
 
-- **M1 Core 已经立住，M0 只差 CI**。59 条测试绿，三个基线哈希当场复验过（§1 表格）。
-- **接手第一件事不是写代码，是跑 §6 那四条命令**。四条里有对不上的，先修环境再动代码——
+- **M1 Core 已经立住，M0 只差 CI**。60 条测试绿，三个基线哈希当场复验过（§1 表格）。
+- **接手第一件事不是写代码，是跑 §6 那五条命令**。有对不上的，先修环境再动代码——
   这个仓库的正确性主张全靠「同种子同命令流 → 同哈希」撑着，跑不出来时任何改动都无法判断好坏。
 - **读的顺序（§11.4 原文）**：本文件 → `AGENTS.md` → GDD §10 + 附录 A → 要动的子系统章节。
   `AGENTS.md` 里那八条架构原则是本仓库的地契，违反其中任意一条的提交应当被打回，而不是被合并后再修。
@@ -22,19 +22,24 @@
 
 ## 1. 仓库实况（2026-11-13 当场核对）
 
+> 新宿主复核（2026-11-13）：.NET SDK 8.0.428 位于 `C:\Program Files\dotnet\dotnet.exe`；本次通过完整路径运行。
+> `.slnx` 在该 SDK 不受支持，已换成 `HexaCiv.sln`。根解决方案 build 0 警告/错误、60 测试全绿；CLI `check` / hash / replay、
+> 空世界 1000 回合、200 年基线与 Godot .NET 4.7.2 smoke 均通过。地图噪声已改为整数定点，MapGenVersion=2。
+> 新基线见下表。只在 Windows 同机做过 CLI ↔ Godot 对账，跨 OS 仍未验证；CI 仍缺失。
+
 | 项 | 值 | 复现 |
 |---|---|---|
-| 分支 / 提交数 | `master`，13 笔，**无 remote、无 tag** | `git branch -a` / `git rev-list --count HEAD` |
-| 未提交 | `docs/TEST_PLAN.md`、`docs/CHANGELOG-DESIGN.md`、`docs/AI_HANDOFF.md`、`AGENTS.md`（M0 文档第三批） | `git status --short` |
-| 测试 | **59 绿，0 跳过**，1 s | `dotnet test --nologo` |
-| 跨宿主末回合哈希 | `3c72a09ae26803e9`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot `-- --smoke` 各打一次，两边同值 |
-| 快照往返 | `3a0d8ef70410ba0a`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
-| 续跑等价 | `511b3328ad7ee58e`（一口气跑满 = 存盘续跑） | 同上 |
-| 200 年基线 | seed 42 末态 `36c3463658b99a90`，`dataHash af324b5a33571234`，2 城 / 人口 89 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` |
-| 代码量 | SimCore 20 文件 / 3884 行 · core.basic 7 / 1158 · 壳层 1457 · 测试 1298 | `find … -name '*.cs' -not -path '*obj*' \| xargs wc -l` |
+| 分支 | `master` 跟踪 `origin/master`；本轮复核提交保留在本地，未推送 | `git branch -vv` / `git log -1 --oneline` |
+| 工作区 | 本轮复核提交后应为 clean | `git status --short` |
+| 测试 | **60 绿，0 跳过** | `dotnet test --nologo` |
+| 跨宿主末回合哈希 | `1cd6f74b25e33aa3`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值 |
+| 快照往返 | `9b82e9599ae198cd`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
+| 续跑等价 | `482c8643eada3e64`（一口气跑满 = 存盘续跑） | 同上 |
+| 200 年基线 | seed 42 末态 `66769b250054b11e`，`dataHash af324b5a33571234`，2 城 / 人口 89 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` |
+| 代码量 | SimCore 20 文件 / 3404 行 · core.basic 7 / 1027 · CLI/Godot 646/642 · 测试 1153 | 排除 `bin/obj` 后统计 `.cs` 行 |
 
 **上面每一个数字都是这次会话里重跑出来的**，不是从旧文档抄的。改动作废它们不算违约，
-但请把 §6 那四条命令当作收工自检跑一遍，把新值写回 `docs/ROADMAP.md` §2 和这里。
+但请把 §6 那六条命令当作收工自检跑一遍，把新值写回 `docs/ROADMAP.md` §2 和这里。
 
 `analysis/out/*.csv` 与 `saves/*.bin` 都被 gitignore（`.gitignore:20,26`），
 它们是**产物**不是**现状**——§5 坑 14 讲过这里踩过一次。
@@ -72,7 +77,7 @@
   `--seed --turns --at --out --save --load --script --data --plugins --no-plugins --no-data --steps --explain --lenient --quiet`。
   动词表在 `Program.cs:15` 的 `UsageText`，改参数别只改代码。
 - **GodotShell**（`src/GodotShell`，739 行）：六边形绘制 + 点格建城 + 侧栏 + 年报 + `-- --smoke`
-  headless 自检（含 183/183 拾取命中与字体诊断）。**刻意不进 `.slnx`**，理由见 `ARCH.md` §5。
+  headless 自检（含 183/183 拾取命中与字体诊断）。**刻意不进 `.sln`**，理由见 `ARCH.md` §5。
 
 ---
 
@@ -164,13 +169,12 @@ CLI 用默认 `AssemblyLoadContext`，Godot 用它自己的脚本上下文；把
 
 **坑 11 — 跨宿主一致性不在 `dotnet test` 里，要手动跑两条。**
 `sim hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` 与
-`godot --headless --path src/GodotShell -- --smoke` 必须同为 `3c72a09ae26803e9`。
+`godot --headless --path src/GodotShell -- --smoke` 必须同为 `1cd6f74b25e33aa3`。
 改 `Main.cs` 的 `Smoke()` 参数**必须同步改 `scripts/godot-smoke.txt`**，两边逐字相同才有意义（`TEST_PLAN.md` §3）。
 
-**坑 12 — GodotShell 不在 `.slnx` 里**：`dotnet build` 不编它，验收要靠 Godot 可执行文件单独跑
-（`ARCH.md` §5）。仓库机器上有两个 4.6 版本，**只有 mono 版能跑 C#**：不带 mono 的正式版跑
-`-- --smoke` 什么都不打印、**退出码还是 0**（当场验过）。判据是屏幕上有没有 `SMOKE PASS`，不是退出码——
-CI 里这条 job 必须 grep 这行，否则会把「根本没跑」当成「跑通了」。
+**坑 12 — GodotShell 不在 `.sln` 里**：`dotnet build` 不编它，验收要靠 Godot 可执行文件单独跑
+（`ARCH.md` §5）。必须用带 .NET 的 Godot 版本，并确保系统安装 .NET SDK、`dotnet` 可调用；无 SDK 时 Godot 无法编译 C#。
+判据是输出 `SMOKE PASS`，不是退出码——CI 里这条 job 必须 grep 这行，否则会把「根本没跑」当成「跑通了」。
 
 **坑 13 — 中文渲染是壳层的事，也是 headless 的盲区。**
 smoke 会打 `FallbackFont=FontFile FallbackFontSize=16`。没装 CJK 字体的机器上地图文字会变方块，
@@ -194,16 +198,19 @@ smoke 会打 `FallbackFont=FontFile FallbackFontSize=16`。没装 CJK 字体的�
 **坑 17 — 规则改动没有 `CHANGELOG-DESIGN.md` 条目 = 未完成**（§11.3 第 4 条）。
 数值改动还要附「改了什么 / 为什么 / 模拟差异」表（第 1 条）。破存档必须附迁移器 + 旧档回归（第 3 条）。
 
+**坑 18 — 地图生成曾用浮点中间量（已修复）。** `MapGen.Bootstrap` 现以整数定点噪声与整数平方根写入 `hex.height` / `hex.landform`，并把 `CoreInfo.MapGenVersion` 升到 2。当前 Windows CLI/Godot 同哈希；跨 OS 地图基线仍待 CI。
+
 ---
 
-## 6. 收工前复验（四条，跑完把新值写回 §1）
+## 6. 收工前复验（六条，跑完把新值写回 §1）
 
 ```bash
 dotnet build -v q --nologo                          # 0 错误（warning = error，坑 9）
-dotnet test --nologo                                # 59 绿
+dotnet test --nologo                                # 60 绿
+dotnet build src/GodotShell/HexaCiv.GodotShell.csproj # GodotShell 不在 solution，单独编译以免加载旧 DLL
 dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
 dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12
-godot --headless --path src/GodotShell -- --smoke    # 与第 3 条同值；mono 版可执行文件
+& 'D:\Applications\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe' --headless --path src/GodotShell -- --smoke # 需 Godot .NET 4.7.2 与 .NET SDK
 ```
 
 `sim check` 顺手跑一下：它同时校验数据包、清单、15 步表与 21 个落点表，是「文档与实现有没有分叉」的最快探针。

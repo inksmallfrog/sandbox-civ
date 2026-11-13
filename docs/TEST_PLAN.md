@@ -2,7 +2,7 @@
 
 > 规范来源：GDD §10.8（七类测试与「每里程碑附一份基线报告」）、§12（里程碑验收）、
 > §5.9（不变量）、§10.7（确定性）、§14（风险表的触发阈值）。
-> 实现：`tests/SimCore.Tests/`（59 条，1298 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
+> 实现：`tests/SimCore.Tests/`（60 条，1153 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```bash
 dotnet build                # TreatWarningsAsErrors：警告就是错误
-dotnet test                 # 59 条，约 1.5 秒
+dotnet test                 # 60 条
 dotnet run --project src/HexaCiv.Cli -- check                    # 数据包 + 插件清单
 dotnet run --project src/HexaCiv.Cli -- hash   --seed 99 --turns 50
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5  --turns 20 --at 12
@@ -41,7 +41,7 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 
 ---
 
-## 2. 59 条的分层清单
+## 2. 60 条的分层清单
 
 ### `FixTests.cs`（12 条）· 定点数本体
 
@@ -86,11 +86,11 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 它们在测试里把 GDD 的公式**重新算了一遍**。实现与文档各写一次、结果必须撞在一起，
 这才叫「贴着附录 A 写代码」被机器看着——只断言一个手抄的期望值是拦不住公式改形的。
 
-### `AcceptanceTests.cs`（13 条）· §12 里程碑验收
+### `AcceptanceTests.cs`（14 条）· §12 里程碑验收
 
 空世界跑一千回合不崩（M0）· 同种子同命令流_逐回合哈希位级相同（M1）· 换种子必须换世界 ·
 少一条命令就该分叉 · 命令被拒也要留下记录而不是静悄悄 · 第K回合的档加后面的命令等于一口气跑满 ·
-读回来的档能改能跑且 kind 计数器续得上 · 坏档不得覆盖最后一个有效存档 ·
+读回来的档能改能跑且 kind 计数器续得上 · **旧地图档读回再存仍保留原生成器版本** · 坏档不得覆盖最后一个有效存档 ·
 存档负载不带 BOM 且带 BOM 的明文档也读得动 · 非法状态在结算里被抓住而不是悄悄跑下去 ·
 宽容模式下同样的坏只记录不抛 · 每一次数值变化都带着理由 · 年报里的数字能对上世界状态。
 
@@ -107,11 +107,12 @@ CLI 跑在 .NET SDK 的默认 `AssemblyLoadContext`，Godot 跑在它自己的�
 
 ```bash
 dotnet build                                                        # 必须先 build：Godot 读的是 build/plugins 的产物
+dotnet build src/GodotShell/HexaCiv.GodotShell.csproj                # GodotShell 不在 solution，必须单独构建
 dotnet run --project src/HexaCiv.Cli -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
-godot --headless --path src/GodotShell -- --smoke                   # 或用 mono 版编辑器可执行文件
+Godot .NET 4.7.2 --headless --path src/GodotShell -- --smoke        # Windows 可用 AGENTS.md 中的完整路径
 ```
 
-两边都必须给出末回合哈希 `3c72a09ae26803e9`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
+两边都必须给出末回合哈希 `1cd6f74b25e33aa3`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
 `Smoke()` 提交的命令**逐字相同**，改一边就要改另一边，否则这条比对立刻红）。
 Godot 侧还顺带验渲染：`smoke 拾取：183/183 命中`、字体回退、`SMOKE PASS`。
 
@@ -165,7 +166,7 @@ Godot 侧还顺带验渲染：`smoke 拾取：183/183 命中`、字体回退、`
 |---|---|---|
 | `build-test` | `dotnet build` + `dotnet test` | 单元/契约/验收任一红。注意 `Directory.Build.props` 里 `TreatWarningsAsErrors=true`，警告也算红 |
 | `sim-headless` | `sim check` → `sim hash --seed 99 --turns 50` → `sim replay --seed 5 --turns 20 --at 12` → `sim run --seed 42 --turns 200 --headless --out` 并上传报告 | 确定性、回放等价、或基线报告无法生成 |
-| `godot-smoke` | `godot --headless --path src/GodotShell -- --smoke`，比对 `3c72a09ae26803e9` | 跨宿主分叉（§3），或渲染/拾取崩了 |
+| `godot-smoke` | `dotnet build src/GodotShell/HexaCiv.GodotShell.csproj` 后运行 `godot --headless --path src/GodotShell -- --smoke`，比对 `1cd6f74b25e33aa3` | 跨宿主分叉（§3），或渲染/拾取崩了 |
 
 三个 job 都该跑在 **ubuntu + windows 两个矩阵**上：§10.7 的位级确定性最怕的就是
 只在开发机上验过。CI 里第一个 Linux 绿的哈希必须当场抄进 `docs/BALANCE.md` §4 与 `CHANGELOG-DESIGN.md`，

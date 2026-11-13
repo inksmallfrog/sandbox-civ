@@ -51,7 +51,7 @@ sandbox-civ/
   Readme.md              怎么跑（人类入口）
   AGENTS.md              后续 AI 的最高优先级工作说明（§11.1）
   Directory.Build.props  net8.0 / LangVersion 12 / Nullable / TreatWarningsAsErrors / RepoRoot
-  HexaCiv.slnx           SimCore + core.basic + sim + tests（Godot 壳层刻意不在里面，见 §6）
+  HexaCiv.sln            SimCore + core.basic + sim + tests（Godot 壳层刻意不在里面，见 §6）
   docs/                  GDD.md（唯一规则来源，AI 不得自行修改）+ §11.1 要求的另外 12 份 + REQUIREMENTS.md + history/ + screenshots/
   src/
     SimCore/             内核（20 个 .cs，见 §3）
@@ -61,7 +61,7 @@ sandbox-civ/
   data/
     _schema.json         每种数据包类型的字段与类型
     core.basic/          building.json / class.json / good.json / landform.json
-  tests/SimCore.Tests/   xUnit，59 条（单测 + §12 里程碑验收）
+  tests/SimCore.Tests/   xUnit，60 条（单测 + §12 里程碑验收）
   scripts/               demo.txt（命令脚本）、godot-smoke.txt（与窗口冒烟同流）
   analysis/out/          基线 CSV 报告（每个里程碑提交附一份）
   saves/                 回归样本档（.gitkeep，产物被 ignore）
@@ -130,10 +130,10 @@ sandbox-civ/
 
 ## 6. 两条实现层的架构决定（GDD 没细说，写在这里防丢）
 
-1. **`src/GodotShell` 不进 `HexaCiv.slnx`。** 它需要带 .NET 的 Godot 4.6 才能构建
+1. **`src/GodotShell` 不进 `HexaCiv.sln`。** 它需要与项目 SDK 版本匹配的 Godot .NET 编辑器才能构建
    （`GodotSharp` 从编辑器目录解析）。放进 solution 会让 `dotnet build` / CI 在没有
    Godot SDK 的机器上直接红，而 CI 的职责恰恰是「没装引擎也能验内核」。
-   构建方式：`dotnet build src/GodotShell` 或直接用 mono 版编辑器打开该目录。
+   构建方式：`dotnet build src/GodotShell` 或直接用匹配 SDK 版本的 Godot .NET 编辑器打开该目录。
 2. **插件装在专用 `AssemblyLoadContext`。** `Assembly.LoadFrom` 会把插件塞进默认上下文，
    而 Godot 的脚本在自己的上下文里 → 插件会绑上第二份 `SimCore` → `IPlugin` 转型失败，
    表现成「程序集里没有 IPlugin 实现」。`PluginHost.PluginLoadContext.Load` 先从

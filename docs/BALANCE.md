@@ -176,7 +176,7 @@ M3 接价格（4.00 石 × 小系数）、M4 接税率（20% × 小基数）时�
 
 ```bash
 dotnet build                                             # 0 warning 0 error（TreatWarningsAsErrors）
-dotnet test                                              # 59 条
+dotnet test                                              # 60 条
 dotnet run --project src/HexaCiv.Cli -- check            # 数据包 + 清单：dataHash 变了要认账
 dotnet run --project src/HexaCiv.Cli -- run --seed 42 --turns 200 --headless --out analysis/out/demo.csv
 dotnet run --project src/HexaCiv.Cli -- hash --seed 99 --turns 50   # 确定性自检（改了不该改的东西会红）

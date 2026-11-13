@@ -9,12 +9,13 @@ namespace CoreBasic;
 /// - 只跑「盆地 + 外环高地」这一条最出效果的地形（§1.2 要的盆地/山谷/山水夹缝在这里已经看得出来）。
 /// - 没有河流（§3.3）、形胜（§3.4）、资源（§3.5）、图层 3–5（§3.9）——那是 M2 的活；
 ///   届时 <see cref="CoreInfo.MapGenVersion"/> 必须 +1 并写进存档（§3.7 末行、§10.6）。
-/// - 噪声只用 + − × ÷ 与 Math.Sqrt（IEEE 754 要求平方根正确舍入），不用 Pow/Exp/三角函数：
-///   §10.7 只禁止 float 进入结算比较，但生成器要求更强——跨平台必须逐格一致，
-///   否则同一个种子在两台机器上长出两副地图，联机哈希永远对不上。
+/// - 噪声只用整数定点与整数平方根，不经过 float/double：地图字段进入世界哈希，
+///   必须让同一个种子在不同平台逐格生成同一张图（§10.7）。
 /// </summary>
 public static class MapGen
 {
+    private const long NoiseScale = 1_000_000;
+
     /// <summary>默认地图半径（轴坐标到中心的最大距离）。半径 4 = 61 格，够摆出盆地又不至于刷屏。</summary>
     public const int DefaultRadius = 4;
 
@@ -60,12 +61,13 @@ public static class MapGen
             for (int r = Math.Max(-radius, -q - radius); r <= Math.Min(radius, -q + radius); r++)
             {
                 int dist = Distance(q, r);
-                double rim = (double)dist / radius;
+                long rim = (long)dist * NoiseScale / radius;
 
                 // §3.7 第 1 步：高度 = 外环抬升 + 两层值噪声。盆地由「中心低、四周高」自然围出来。
-                double noise = 0.62 * Smooth(ctx, q, r, 3, 1) + 0.38 * Smooth(ctx, q, r, 2, 7919);
-                double raw = 8 + 86 * rim * Math.Sqrt(rim) + 30 * (noise - 0.5);
-                int h = (int)Math.Round(raw);
+                long noise = (62 * Smooth(ctx, q, r, 3, 1) + 38 * Smooth(ctx, q, r, 2, 7919)) / 100;
+                long rimCurve = rim * IntegerSqrt(rim * NoiseScale) / NoiseScale;
+                long raw = 8 * NoiseScale + 86 * rimCurve + 30 * (noise - NoiseScale / 2);
+                int h = (int)RoundScaled(raw);
                 if (h < 0) h = 0; else if (h > 100) h = 100;
 
                 var landform = Classify(grades, h);
@@ -137,25 +139,55 @@ public static class MapGen
     /// 格点值噪声：同一个 (i, j, cell, salt) 永远给同一个数，且不依赖任何随机流的调用顺序。
     /// 这是 §8.3「同种子同输入同输出」的最强形式——连调用次数都不敏感，插一种地形不会挪动别处的噪声。
     /// </summary>
-    private static double Smooth(IStepContext ctx, int q, int r, int cell, long salt)
+    private static long Smooth(IStepContext ctx, int q, int r, int cell, long salt)
     {
-        double x = (double)q / cell, y = (double)r / cell;
-        int xi = (int)Math.Floor(x), yi = (int)Math.Floor(y);
-        double fx = x - xi, fy = y - yi;
-        double sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);   // smoothstep：只用乘加
+        int xi = FloorDiv(q, cell), yi = FloorDiv(r, cell);
+        long sx = Smoothstep(q - xi * cell, cell), sy = Smoothstep(r - yi * cell, cell);
 
-        double a = Corner(ctx, xi, yi, salt), b = Corner(ctx, xi + 1, yi, salt);
-        double c = Corner(ctx, xi, yi + 1, salt), d = Corner(ctx, xi + 1, yi + 1, salt);
-        double top = a + (b - a) * sx;
-        double bot = c + (d - c) * sx;
-        return top + (bot - top) * sy;
+        long a = Corner(ctx, xi, yi, salt), b = Corner(ctx, xi + 1, yi, salt);
+        long c = Corner(ctx, xi, yi + 1, salt), d = Corner(ctx, xi + 1, yi + 1, salt);
+        long top = Lerp(a, b, sx);
+        long bot = Lerp(c, d, sx);
+        return Lerp(top, bot, sy);
     }
 
-    private static double Corner(IStepContext ctx, int i, int j, long salt)
+    private static long Corner(IStepContext ctx, int i, int j, long salt)
     {
         // StableHash 是 FNV-1a 64，低位偏弱，再叠一层 SplitMix64 的最终混合把弱位打散。
         ulong h = StableHash.Mix(StableHash.Of($"g{i},j{j},s{salt}"), ctx.Rng.WorldSeed);
         h ^= h >> 33; h *= 0xff51afd7ed558ccdUL; h ^= h >> 33; h *= 0xc4ceb9fe1a85ec53UL; h ^= h >> 33;
-        return (h >> 11) * (1.0 / 9007199254740992.0);   // 高 53 位 → [0,1)
+        return (long)(((UInt128)(h >> 11) * (ulong)NoiseScale) >> 53);   // 高 53 位定点映射到 [0, 1)
     }
+
+    private static int FloorDiv(int value, int divisor)
+    {
+        int quotient = value / divisor;
+        return value < 0 && value % divisor != 0 ? quotient - 1 : quotient;
+    }
+
+    private static long Smoothstep(int fraction, int cell)
+    {
+        long t = (long)fraction * NoiseScale / cell;
+        long tSquared = t * t / NoiseScale;
+        return tSquared * (3 * NoiseScale - 2 * t) / NoiseScale;
+    }
+
+    private static long Lerp(long from, long to, long amount) =>
+        from + (to - from) * amount / NoiseScale;
+
+    private static long IntegerSqrt(long value)
+    {
+        long low = 0, high = NoiseScale;
+        while (low < high)
+        {
+            long mid = (low + high + 1) / 2;
+            if (mid <= value / mid) low = mid;
+            else high = mid - 1;
+        }
+        return low;
+    }
+
+    private static long RoundScaled(long value) => value >= 0
+        ? (value + NoiseScale / 2) / NoiseScale
+        : -((-value + NoiseScale / 2) / NoiseScale);
 }

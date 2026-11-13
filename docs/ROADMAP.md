@@ -9,7 +9,7 @@
 
 ## 0. 一分钟版
 
-- **M0 骨架 / M1 Core：已完成并当场复验**（§2 有逐条证据）。当前 `dotnet test` = 59 绿。
+- **M0 骨架 / M1 Core：已完成并当场复验**（§2 有逐条证据）。当前 `dotnet test` = 60 绿。
 - **下一个是 M2 地图**。M1 的地图只是「半径 4 的六边形 + 高度图 + 地表分类」，
   和 §3.7 的六步管线比还差四步（河流 / 形胜 / 资源 / 图层 3–5）。
 - **推进纪律（§12 原文三条）**：验收不过不许开下一个；每里程碑做一次逻辑量盘点写进
@@ -48,7 +48,7 @@
 |---|---|---|
 | 空世界跑 1000 回合不崩 | ✅ | `dotnet run --project src/HexaCiv.Cli --no-build -- run --no-plugins --no-data --turns 1000 --quiet` → exit 0，**0.9 s**（含进程启动；带编译约 3.7 s）。同一件事的常驻版本是测试 `空世界跑一千回合不崩` |
 | 仓库结构 | ✅ | `docs/ARCH.md` §2 的目录树 = `ls` 结果 |
-| Godot + SimCore solution | ✅ | `HexaCiv.slnx`（SimCore / core.basic / CLI / tests）；GodotShell 刻意不入 solution，理由见 `ARCH.md` §5 |
+| Godot + SimCore solution | ✅ | `HexaCiv.sln`（SimCore / core.basic / CLI / tests）；GodotShell 刻意不入 solution，理由见 `ARCH.md` §5 |
 | 文档 13 份（§11.1 要 12 份 + REQUIREMENTS） | ✅ | `docs/`：ARCH · CORE_API · PLUGIN_API · SIM_ORDER · DATA_SCHEMA · SAVE_FORMAT · NETWORKING · BALANCE · ROADMAP · TEST_PLAN · CHANGELOG-DESIGN · AI_HANDOFF = GDD 要求的另外 12 份，一份不缺；第 13 份是 `REQUIREMENTS.md`——§11.1 把 `GDD.md` 自己也算进 13 份里，而它是唯一不需要产出的那一份（且 AI 不得修改） |
 | **CI（单测 + headless）** | ⛪ **缺口** | 本仓库还没有 `.github/workflows`。M0 因此标 🟡 而不是 ✅。要补的 job 与命令清单在 `docs/TEST_PLAN.md` §6 |
 
@@ -61,8 +61,8 @@ CI 是 M0 三条验收里唯一没兑现的。补完之后本节应全绿。
 |---|---|---|
 | 同种子同命令流 → 哈希位级相同 | ✅ | `sim hash --seed 99 --turns 50` → 末态 `a221788270cd695a`，两遍逐回合全同；另有测试 `同种子同命令流_逐回合哈希位级相同`、`少一条命令就该分叉` |
 | 非法插件被拒载 | ✅ | 测试 `清单有问题就拒载`、`依赖决定装载顺序且禁止成环`、`清单键名拼错就拒载而不是静默落回默认值`；装载检查顺序见 `docs/PLUGIN_API.md` §3 |
-| 存档 = 快照 + 命令流（§10.6） | ✅ | `sim replay --seed 5 --turns 20 --at 12` → 快照往返 `3a0d8ef70410ba0a`，续跑与一口气跑满同为 `511b3328ad7ee58e` |
-| 跨宿主一致（CLI ↔ Godot） | ✅ | `sim hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` 与 `godot --headless --path src/GodotShell -- --smoke` 同为 `3c72a09ae26803e9` |
+| 存档 = 快照 + 命令流（§10.6） | ✅ | `sim replay --seed 5 --turns 20 --at 12` → 快照往返 `9b82e9599ae198cd`，续跑与一口气跑满同为 `482c8643eada3e64` |
+| 跨宿主一致（CLI ↔ Godot） | ✅ | CLI 与 Godot 4.7.2 .NET smoke 同为 `1cd6f74b25e33aa3`；拾取 183/183，输出 `SMOKE PASS` |
 | Core 无玩法也能跑（§0.2 判定 5） | ✅ | `sim run --no-plugins --no-data`；`src/SimCore` 里 `grep Godot` 只命中注释，见 `ARCH.md` §3 |
 | 每个变更带因果（§8.4） | ✅ | `sim run --explain`；测试 `每一次数值变化都带着理由` |
 | 不变量当场抓（§5.9） | ✅ | 测试 `非法状态在结算里被抓住而不是悄悄跑下去` + `宽容模式下同样的坏只记录不抛` |
@@ -91,7 +91,7 @@ M1 现在的生成器（`src/Plugins/core.basic/MapGen.cs`）只跑了 §3.7 六
    半径存全局字段 `config.mapRadius`，1–12 越界即拒建图），
    §3.7 与 §13.1 要的是 **32 × 20**，即轴向坐标下的矩形。这一步会改 `MapGen.Bootstrap` 的遍历范围
    与 `hex.q.r` 的 id 约定，也要改 GodotShell 的渲染与拾取（smoke 现在报「拾取 183/183 命中」）。
-2. **`CoreInfo.MapGenVersion` 必须 +1 并写进存档**（`Simulation.cs:228` 已经在写 `meta.mapGenVersion`）。
+2. **改地图算法必须递增 `CoreInfo.MapGenVersion` 并写进存档**（`Simulation.cs:228` 已在写 `meta.mapGenVersion`；当前值为 2）。
    旧种子会长出新地图，这是 §3.7 末行与 §10.6 的明写要求，不是回归。
 3. **选址规则跟着改**。`Siting.BestTownSite` 现在是
    `score = Σ 半径 2 内无主格的 Y粮 × 100 − 已开发格数`，平票取 hex id 的 ordinal 最小者；
