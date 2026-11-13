@@ -28,7 +28,7 @@
 
 | 里程碑 | 交付（§12 原文摘要） | 验收标准 | 标签 | 状态 |
 |---|---|---|---|---|
-| **M0 骨架** | 仓库结构、Godot+SimCore solution、CI（单测 + headless）、13 份文档 | 空世界 1000 回合不崩；CI 绿；文档齐全 | `v0.0` | ✅ GitHub `windows-latest` run #2（`f05f9b1`，2026-11-13）三 job 全绿；Linux 按设计者决定暂不验（§2.1） |
+| **M0 骨架** | 仓库结构、Godot+SimCore solution、CI（单测 + headless）、13 份文档 | 空世界 1000 回合不崩；CI 绿；文档齐全 | `v0.0` | ✅ GitHub run #6（`5e9cef9`，2026-11-13）Windows + Linux 六组合全绿；`v0.0` 已打在 `d4720f1`，分支改名 `main`（§2.1） |
 | **M1 Core** | 世界存储、五阶段调度、分层 RNG、数据注册、不变量、存档/命令流、插件宿主 | 同种子同命令流 → 哈希位级相同；非法插件被拒载 | `v0.1` | ✅ 两条都当场复验（§2.2） |
 | **M2 地图** | 六边形渲染、五层数据、生成器（盆地/山谷/河网/隘口）、拾取 | 32×20 生成 < 1s；同形胜在 20 张图里人工可认出；同种子同图 | `v0.2` | ✅ 四个切片全部落地（§2.3）；机器验收 97 绿、建图约 74 ms、CLI/Godot 同哈希，人工目检材料见 `analysis/out/m2-shapes.txt` |
 | **M3 单镇经济** | 一镇、农民、地块潜力、库存、公式一 + 公式二 | 守恒通过；制造一次灾年，价格与库存轨迹符合预期 | `v0.3` | 🟡 **公式二（Pricing.cs）+ 物资守恒（basic.conservation）+ 价格区间（basic.price_bounds）已完成**；但价格不影响消费分配逻辑（等 M5）、银守恒与人口守恒未实现（等 M4–M5） |
@@ -55,7 +55,7 @@
 | 仓库结构 | ✅ | `docs/ARCH.md` §2 的目录树 = `ls` 结果 |
 | Godot + SimCore solution | ✅ | `HexaCiv.sln`（SimCore / core.basic / CLI / tests）；GodotShell 刻意不入 solution，理由见 `ARCH.md` §5 |
 | 文档 13 份（§11.1 要 12 份 + REQUIREMENTS） | ✅ | `docs/`：ARCH · CORE_API · PLUGIN_API · SIM_ORDER · DATA_SCHEMA · SAVE_FORMAT · NETWORKING · BALANCE · ROADMAP · TEST_PLAN · CHANGELOG-DESIGN · AI_HANDOFF = GDD 要求的另外 12 份，一份不缺；第 13 份是 `REQUIREMENTS.md`——§11.1 把 `GDD.md` 自己也算进 13 份里，而它是唯一不需要产出的那一份（且 AI 不得修改） |
-| **CI（单测 + headless）** | ✅ **GitHub Windows 首验已绿** | run #2（`f05f9b1`，2026-11-13，1m33s）：`build-test` 97 测试通过；`sim-headless` 走完 check / hash / replay / 200y 并产出 CSV；`godot-smoke` 打出 `SMOKE PASS`，CLI 与 Godot 同为 `fc88ca36ce90fb37`。GitCode 侧 `.gitcode/workflows/ci.yml` 仍在等「代码化流水线内测名额」，未触发。Linux 暂不验 |
+| **CI（单测 + headless）** | ✅ **Windows + Linux 首验已绿** | run #6（`main` / `5e9cef9`，2026-11-13，1m18s）：六个矩阵组合全绿——`build-test` 97 测试 × 2 OS；`sim-headless` check / hash / replay / 200y × 2 OS；`godot-smoke` 两个 OS 都 `SMOKE PASS` 且 CLI 与 Godot 同为 `fc88ca36ce90fb37`，4 份 artifact。GitCode 侧 `.gitcode/workflows/ci.yml` 仍在等内测名额，未触发 |
 
 **这一条要在 M0 收尾时验收通过再打 `v0.0`**：§12 的推进规则是「验收不通过不许开下一个」。
 工作流入库只消除了配置缺口，不代替 CI 运行证据；首跑全绿后本节才能标 ✅。

@@ -181,12 +181,13 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 
 ---
 
-## 6. CI：配置已补，待首次 Windows 验收
+## 6. CI：Windows + Linux 双系统，首验已绿
 
 **GitCode（实际远端）只识别 `.gitcode/workflows/*.yml`**，所以真正的流水线是
-`.gitcode/workflows/ci.yml`（`runs-on: [windows-latest, x64, small]`，`build-test` + `sim-headless` 两个 job）。
-`.github/workflows/ci.yml` 是 GitHub 兼容镜像，多一个 `godot-smoke` job；两边命令与哈希判据必须一致，改一个就要改另一个。
-全部 Windows-only（Linux 按设计者决定暂不验），`fail-fast: false`，避免一个 job 先红就吞掉另一个的证据：
+`.gitcode/workflows/ci.yml` 与 `.github/workflows/ci.yml` 都是 `ubuntu-latest + windows-latest` 矩阵
+（GitCode 侧 `runs-on: [${{ matrix.os }}, x64, small]`；`build-test` + `sim-headless`，GitHub 多一个 `godot-smoke`）。
+两边命令与哈希判据必须一致，改一个就要改另一个。
+`fail-fast: false`，避免一个系统先红就吞掉另一个系统的证据：
 
 | job | 步骤 | 挂了意味着 |
 |---|---|---|
@@ -195,9 +196,10 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 | `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `fc88ca36ce90fb37`，并上传对账日志 |
 
 2026-11-13 在 Windows 宿主 #2 按上述步骤复验通过，两个 Godot 官方下载地址均返回 200。
-**远端首跑已执行**：GitHub run #2（commit `f05f9b1`，2026-11-13，1m33s）三个 job 全绿，
-`godot-smoke` 的产物里 CLI 与 Godot 同为 `fc88ca36ce90fb37`，M0 因此可以标 ✅。
-GitCode 侧流水线仍受内测名额限制，未触发。CI 的 Windows 首跑哈希必须当场抄进
+**远端首跑已执行**：GitHub run #6（`main` / `5e9cef9`，2026-11-13，1m18s）六个矩阵组合全绿，
+`ubuntu-latest` 与 `windows-latest` 的 `godot-smoke` 产物里 CLI 与 Godot 同为 `fc88ca36ce90fb37`，
+跨 OS 同种子同哈希在 CI 上成立，M0 因此标 ✅。
+GitCode 侧流水线仍受内测名额限制，未触发。CI 的首跑哈希必须当场抄进
 `docs/BALANCE.md` §4 与 `CHANGELOG-DESIGN.md`，之后它就是基线。在此之前，
 「跨平台一致」是一个尚未验证的假设，不是已完成的事实。
 
