@@ -35,7 +35,7 @@ public static class AsciiMap
         }
 
         sb.AppendLine();
-        sb.AppendLine("图例：大写=无主格，小写=已入辖地，C=城址；字母取自地表 id 短名首字母");
+        sb.AppendLine("图例：大写=无主格，小写=已入辖地，@=城址；字母取自地表 id 短名首字母");
         foreach (var lf in sim.Data.OfType("landform"))
             sb.AppendLine($"  {Initial(lf.Id)} = {lf.GetStr("title")}（Y粮 {lf.GetFix("potential.food").Text}，可建城 {(lf.Get("buildable").AsBool() ? "是" : "否")}）");
 
@@ -55,7 +55,7 @@ public static class AsciiMap
     {
         string land = hex.GetStr("hex.landform");
         string glyph = Initial(land);
-        if (!string.IsNullOrEmpty(hex.GetStr("hex.town"))) return "C";
+        if (!string.IsNullOrEmpty(hex.GetStr("hex.town"))) return "@";
         if (!string.IsNullOrEmpty(hex.GetStr("hex.owner"))) return glyph.ToLowerInvariant();
         return glyph;
     }

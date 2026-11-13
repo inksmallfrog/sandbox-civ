@@ -18,7 +18,7 @@ public static class CoreInfo
     public const string GameVersion = "0.1.0";
 
     /// <summary>地图生成器版本（§3.7「生成器版本号写入存档」）。改生成管线必须 +1。</summary>
-    public const int MapGenVersion = 3;
+    public const int MapGenVersion = 4;
 
     public static string Describe => $"Core API {ApiVersion} · schema {SchemaVersion} · game {GameVersion} · mapgen {MapGenVersion}";
 }

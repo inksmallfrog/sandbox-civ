@@ -3,16 +3,18 @@ using SimCore;
 namespace CoreBasic;
 
 /// <summary>
-/// 地图生成（GDD §3.7 六步管线的前两步：高度图 → 地表分类，再算 §3.6 的 Y_g 粮潜力）。
+/// 地图生成（GDD §3.7 六步管线的前四步：高度图 → 温度/降水 → 地表分类 → Y_g 粮潜力）。
 ///
-/// M2 切片一的取舍与后续接口：
-/// - 地图形状已是 §3.9 / §13.1 的 <b>32 × 20 矩形</b>：按 odd-r 偏移坐标铺格，存的是轴坐标，
+/// M2 切片二的取舍与后续接口：
+/// - 地图形状是 §3.9 / §13.1 的 <b>32 × 20 矩形</b>：按 odd-r 偏移坐标铺格，存的是轴坐标，
 ///   于是屏幕上是矩形、<see cref="Distance(int,int)"/> 仍是标准轴距（§3.1）。
-/// - 只跑「边缘高地 + 中央低地」这一条最出效果的地形；河流（§3.3）、形胜（§3.4）、
-///   资源（§3.5）、图层 4–5（§3.9）仍是后续切片。
-/// - 形状改了就必须递增 <see cref="CoreInfo.MapGenVersion"/> 并写进存档（§3.7 末行、§10.6）；
+/// - 高度图为「大陆轮廓（中央高、边缘低）+ 两层值噪声」；温度按行给纬度梯度，降水用两层值噪声（§3.7 第 3 步）。
+/// - 九类地表（§3.2 全部行）由 <b>数据里声明的气候区间</b>命中，不在代码里写阈值：
+///   加一种地表 = 加一行 JSON，分类代码不用动。
+/// - 河流（§3.3）、形胜（§3.4）、资源（§3.5）、图层 4–5（§3.9）仍是后续切片。
+/// - 任何生成算法改动都必须递增 <see cref="CoreInfo.MapGenVersion"/> 并写进存档（§3.7 末行、§10.6）；
 ///   旧种子会长出新地图，这是明写要求，不是回归。
-/// - 噪声只用整数定点与整数平方根，不经过 float/double：地图字段进入世界哈希，
+/// - 噪声只用整数定点，不经过 float/double：地图字段进入世界哈希，
 ///   必须让同一个种子在不同平台逐格生成同一张图（§10.7）。
 /// </summary>
 public static class MapGen
@@ -77,7 +79,7 @@ public static class MapGen
         if (rows is < 8 or > 128)
             throw new SimDataException($"{F.ConfigMapRows}={rows} 越界（8–128），拒绝建图");
 
-        var grades = GradeTable(ctx.Data.OfType(F.TypeLandform));
+        var climate = ClimateTable(ctx.Data.OfType(F.TypeLandform));
 
         int maxEdgeCol = (columns - 1) / 2;
         int maxEdgeRow = (rows - 1) / 2;
@@ -89,82 +91,99 @@ public static class MapGen
             {
                 var (q, r) = AxialOfOffset(col, row);
 
-                // §3.7 第 1 步：高度 = 边缘抬升 + 两层值噪声。
-                // 边缘量取「离四条边最近的距离」分别在两轴上归一化后取大者，
-                // 于是高地沿着矩形轮廓围一圈，中央留出可种地的低地（大陆轮廓 + 边缘衰减）。
-                long rimCol = (long)(maxEdgeCol - Math.Min(col, columns - 1 - col)) * NoiseScale / maxEdgeCol;
-                long rimRow = (long)(maxEdgeRow - Math.Min(row, rows - 1 - row)) * NoiseScale / maxEdgeRow;
-                long rim = Math.Max(rimCol, rimRow);
-                long noise = (62 * Smooth(ctx, q, r, 3, 1) + 38 * Smooth(ctx, q, r, 2, 7919)) / 100;
-                long rimCurve = rim * IntegerSqrt(rim * NoiseScale) / NoiseScale;
-                long raw = 8 * NoiseScale + 86 * rimCurve + 30 * (noise - NoiseScale / 2);
+                // §3.7 第 1 步：大陆轮廓（中央高、边缘低）+ 两层值噪声。
+                // inland 取「离四条边最近的距离」在两轴归一化后的较小者，于是四周是低地海岸、
+                // 中央抬成高原，山脊由 broad/detail 两层噪声决定。
+                long inlandCol = (long)Math.Min(col, columns - 1 - col) * NoiseScale / maxEdgeCol;
+                long inlandRow = (long)Math.Min(row, rows - 1 - row) * NoiseScale / maxEdgeRow;
+                long inland = Math.Min(inlandCol, inlandRow);
+                long broad = Smooth(ctx, q, r, 6, 4241);
+                long detail = Smooth(ctx, q, r, 2, 7919);
+                long raw = 2 * NoiseScale + 80 * inland + (40 * broad + 24 * detail - 32 * NoiseScale);
                 int h = (int)RoundScaled(raw);
                 if (h < 0) h = 0; else if (h > 100) h = 100;
 
-                var landform = Classify(grades, h);
+                // §3.7 第 3 步：温度按行给纬度梯度（北冷南暖），叠一层小噪声防止出现完美横带；
+                // 降水用两层值噪声。两者都只用于分类，进入世界哈希，所以同样必须整数定点。
+                int t = (int)RoundScaled((long)row * 100 * NoiseScale / (rows - 1)
+                                         + (Smooth(ctx, q, r, 6, 3301) - NoiseScale / 2) * 20);
+                if (t < 0) t = 0; else if (t > 100) t = 100;
+                int p = (int)RoundScaled(58 * Smooth(ctx, q, r, 7, 5501) + 42 * Smooth(ctx, q, r, 3, 9001));
+                if (p < 0) p = 0; else if (p > 100) p = 100;
+
+                bool edge = col == 0 || row == 0 || col == columns - 1 || row == rows - 1;
+                var landform = Classify(climate, h, t, p, edge);
                 tally[landform.Id] = tally.GetValueOrDefault(landform.Id) + 1;
 
                 EntityId id = HexId(q, r);
-                var ent = ctx.CreateEntity(F.KindHex, "新开局建图（§3.7 第 1–2 步）", id);
+                ctx.CreateEntity(F.KindHex, "新开局建图（§3.7 第 1–4 步）", id);
                 ctx.Mutate(id, F.HexQ, q, "轴坐标 q（§3.1），与 id 互为冗余，读档后可互相校验");
                 ctx.Mutate(id, F.HexR, r, "轴坐标 r");
                 ctx.Mutate(id, F.HexHeight, h, "高度图（§3.7 第 1 步）。形胜识别（§3.4）在 M2 读它");
-                ctx.Mutate(id, F.HexLandform, landform.Id, $"高度 {h} 落进 [{FloorOf(grades, landform.Id)}, {CeilOf(grades, landform.Id)}] 这一档（§3.2）");
+                ctx.Mutate(id, F.HexTemp, t, "温度（§3.7 第 3 步）：纬度梯度 + 小噪声；冻土分类读它");
+                ctx.Mutate(id, F.HexRain, p, "降水（§3.7 第 3 步）：两层值噪声；荒漠/湿地分类读它");
+                ctx.Mutate(id, F.HexLandform, landform.Id,
+                    $"高度 {h} / 温度 {t} / 降水 {p}{(edge ? " / 边缘" : "")} 命中「{landform.GetStr("title")}」的气候区间（§3.2 / §3.7 第 4 步）");
                 ctx.Mutate(id, F.HexMoveCost, landform.GetInt("moveCost"), "§3.6 地表通行成本：行军与运输都读它");
                 ctx.Mutate(id, F.HexDefense, landform.GetInt("defense"), "§3.6 地表防御：M1 只写不算，军事在 M6");
                 ctx.Mutate(id, F.HexBuildable, SimValue.OfBool(landform.Get("buildable").AsBool()), "§3.2 可否建城（山地只能做隘口）");
                 ctx.Mutate(id, F.HexYieldFood, landform.GetFix("potential.food"),
-                    "Y_g 粮潜力（§3.6 第一行）。M2 切片一仍无形胜/资源/水利，后三个倍率暂为 1.00");
+                    "Y_g 粮潜力（§3.6 第一行）。M2 切片二仍无形胜/资源/水利，后三个倍率暂为 1.00");
                 created++;
             }
 
-        var detail = string.Join("、", tally.Select(kv =>
+        var detailTally = string.Join("、", tally.Select(kv =>
             $"{ctx.Data.Get(kv.Key).GetStr("title")} {kv.Value} 格"));
-        ctx.Note($"地图：{columns} × {rows} 共 {created} 格 —— {detail}");
+        ctx.Note($"地图：{columns} × {rows} 共 {created} 格 —— {detailTally}");
         ctx.Mutate(World.GlobalId, "meta.mapColumns", columns, "建图列数写回全局，UI 画边界与无头报告都要读（§3.9）");
         ctx.Mutate(World.GlobalId, "meta.mapRows", rows, "建图行数写回全局");
         ctx.Mutate(World.GlobalId, "meta.mapTiles", created, "地块总数");
     }
 
     /// <summary>
-    /// 高度档表：把数据包里的地表按 <c>potential.food</c> <b>升序</b>排，
-    /// 第 i 档占高度区间 [100−20(i+1), 100−20i)。于是最不能种地的（山地）住最高的那一档。
-    /// 加一种地表 = 加一行数据并给它一个潜力值，这段代码不用动。
+    /// 气候分类表：每条数据自带 <c>class.*</c> 区间与优先级（§3.2 的地表表就是数据）。
+    /// 按优先级从高到低匹配，第一个命中的就是该格地表；区间有空档时直接抛异常，
+    /// 逼数据作者把九类地表铺满整个 (高度, 温度, 降水, 边缘) 空间，而不是悄悄退化成某一类。
     /// </summary>
-    private static List<(int floor, DataEntry entry)> GradeTable(IReadOnlyList<DataEntry> landforms)
+    private sealed record ClimateRule(
+        DataEntry Entry, int Priority,
+        int HeightMin, int HeightMax,
+        int TempMin, int TempMax,
+        int RainMin, int RainMax,
+        bool EdgeOnly);
+
+    private static List<ClimateRule> ClimateTable(IReadOnlyList<DataEntry> landforms)
     {
         if (landforms.Count == 0)
             throw new SimDataException($"数据包里没有 type={F.TypeLandform} 的记录，地图生成器无从分类");
-        if (landforms.Count > 5)
-            throw new SimDataException($"地表 {landforms.Count} 类 > 5：每档只剩 {100 / landforms.Count} 高度，分类会退化（§3.2 是 9 类配 9 档，M2 再扩）");
 
-        var ordered = landforms
-            .OrderBy(e => e.GetFix("potential.food").Raw)
-            .ThenBy(e => e.Id, StringComparer.Ordinal)     // 潜力相同按 id 定序，平票裁决跨平台一致（§10.7 纪律 1）
+        return landforms
+            .Select(e => new ClimateRule(
+                e,
+                (int)e.GetInt("class.priority"),
+                (int)e.GetInt("class.height.min", 0),
+                (int)e.GetInt("class.height.max", 100),
+                (int)e.GetInt("class.temp.min", 0),
+                (int)e.GetInt("class.temp.max", 100),
+                (int)e.GetInt("class.rain.min", 0),
+                (int)e.GetInt("class.rain.max", 100),
+                e.Get("class.edge").AsBool()))
+            .OrderByDescending(rule => rule.Priority)
+            .ThenBy(rule => rule.Entry.Id, StringComparer.Ordinal)   // 同优先级按 id 定序（§10.7 纪律 1）
             .ToList();
-
-        int bands = ordered.Count;
-        int span = 100 / bands;
-        var table = new List<(int, DataEntry)>(bands);
-        for (int i = 0; i < bands; i++)
-            table.Add((Math.Max(100 - span * (i + 1), 0), ordered[i]));
-        return table;
     }
 
-    private static DataEntry Classify(List<(int floor, DataEntry entry)> grades, int height)
+    private static DataEntry Classify(List<ClimateRule> rules, int height, int temp, int rain, bool edge)
     {
-        foreach (var (floor, entry) in grades)
-            if (height >= floor) return entry;
-        return grades[^1].entry;
-    }
+        foreach (var rule in rules)
+            if (height >= rule.HeightMin && height <= rule.HeightMax
+                && temp >= rule.TempMin && temp <= rule.TempMax
+                && rain >= rule.RainMin && rain <= rule.RainMax
+                && (!rule.EdgeOnly || edge))
+                return rule.Entry;
 
-    private static int FloorOf(List<(int floor, DataEntry entry)> grades, string id) =>
-        grades.First(g => g.entry.Id == id).floor;
-
-    private static int CeilOf(List<(int floor, DataEntry entry)> grades, string id)
-    {
-        int i = grades.FindIndex(g => g.entry.Id == id);
-        return i == 0 ? 100 : grades[i - 1].floor - 1;
+        throw new SimDataException(
+            $"高度 {height} / 温度 {temp} / 降水 {rain} / 边缘 {edge} 没有匹配的地表：§3.2 的 class.* 区间有空档");
     }
 
     /// <summary>
@@ -206,18 +225,6 @@ public static class MapGen
 
     private static long Lerp(long from, long to, long amount) =>
         from + (to - from) * amount / NoiseScale;
-
-    private static long IntegerSqrt(long value)
-    {
-        long low = 0, high = NoiseScale;
-        while (low < high)
-        {
-            long mid = (low + high + 1) / 2;
-            if (mid <= value / mid) low = mid;
-            else high = mid - 1;
-        }
-        return low;
-    }
 
     private static long RoundScaled(long value) => value >= 0
         ? (value + NoiseScale / 2) / NoiseScale

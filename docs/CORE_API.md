@@ -11,7 +11,7 @@
 | 加方法 / 加 hook 点 / 加只读属性 | minor `1.x` | `IStepContext.DispatchSubjects` 加可选 `argsFactory` |
 | 改已有签名 / 改语义 / 删成员 | major `2.0` + 迁移说明 | 把 `Mutate` 的 `reason` 变成可选 |
 | 改存档结构 | 与本版本无关，走 `CoreInfo.SchemaVersion` | 见 `docs/SAVE_FORMAT.md` |
-| 改地图生成管线 | 递增 `CoreInfo.MapGenVersion` | 当前 3；见 `docs/ROADMAP.md` M2 |
+| 改地图生成管线 | 递增 `CoreInfo.MapGenVersion` | 当前 4；见 `docs/ROADMAP.md` M2 |
 
 下面每个成员都标了 M1 的实际状态：`✅` 已实现并在用；`🟡` 已实现但暂无消费者；
 `⛪ 保留`：接口位已留，功能在后续里程碑。
@@ -389,7 +389,7 @@ class PluginHost { IReadOnlyList<LoadedPlugin> Loaded; IReadOnlyList<string> Loa
                    void LoadFromAssemblies(assemblies, IPluginRegistrar);
                    IReadOnlyList<string> DescribeLoaded(); }
 static class CoreInfo { ApiVersion "1.0"; ApiMajor 1; ApiMinor 0; SchemaVersion 1; GameVersion "0.1.0";
-                        MapGenVersion 3; string Describe }
+                        MapGenVersion 4; string Describe }
 ```
 
 - `PluginManifest.TryRead` 会**拒绝未知键**（`@` 开头的除外）。这是防「驼峰键静默落回默认值」，

@@ -34,6 +34,8 @@ public static class F
     public const string HexQ = "hex.q";                   // int: 轴坐标（§3.1），与 id 互为冗余，读档后校验
     public const string HexR = "hex.r";
     public const string HexHeight = "hex.height";         // int 0–100：§3.7 第 1 步的高度图留痕，形胜识别要读
+    public const string HexTemp = "hex.temp";             // int 0–100：§3.7 第 3 步温度（纬度梯度 + 噪声）
+    public const string HexRain = "hex.rain";             // int 0–100：§3.7 第 3 步降水（两层值噪声）
     public const string HexMoveCost = "hex.moveCost";      // int: §3.6 地表通行成本
     public const string HexDefense = "hex.defense";        // int: §3.6 地表防御
     public const string HexBuildable = "hex.buildable";    // bool: 可否建城（§3.2）

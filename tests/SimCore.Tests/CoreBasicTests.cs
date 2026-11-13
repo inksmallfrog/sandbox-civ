@@ -73,6 +73,48 @@ public class CoreBasicTests
     }
 
     [Fact]
+    public void 地表是GDD九类且每格都命中自己的气候区间()
+    {
+        var sim = Open(7);
+        var defs = sim.Data.OfType(F.TypeLandform);
+        Assert.Equal(
+            ["landform.coast", "landform.desert", "landform.forest", "landform.grassland", "landform.hill",
+             "landform.mountain", "landform.plain", "landform.tundra", "landform.wetland"],
+            defs.Select(d => d.Id).OrderBy(id => id, StringComparer.Ordinal));
+
+        foreach (var hex in sim.World.OfKind("hex"))
+        {
+            var (q, r) = MapGen.Coords(hex.Id);
+            int col = q + ((r - (r & 1)) / 2);
+            bool edge = col == 0 || rowIsEdge(r) || col == MapGen.MapColumns - 1;
+
+            var lf = sim.Data.Get(hex.GetStr(F.HexLandform));
+            int h = (int)hex.GetInt(F.HexHeight), t = (int)hex.GetInt(F.HexTemp), p = (int)hex.GetInt(F.HexRain);
+
+            Assert.InRange(h, lf.GetInt("class.height.min", 0), lf.GetInt("class.height.max", 100));
+            Assert.InRange(t, lf.GetInt("class.temp.min", 0), lf.GetInt("class.temp.max", 100));
+            Assert.InRange(p, lf.GetInt("class.rain.min", 0), lf.GetInt("class.rain.max", 100));
+            if (lf.Get("class.edge").AsBool())
+                Assert.True(edge, $"{hex.Id} 是 {lf.Id}，但不在边缘（class.edge 要求海岸只出现在地图四周）");
+        }
+
+        static bool rowIsEdge(int r) => r == 0 || r == MapGen.MapRows - 1;
+    }
+
+    [Fact]
+    public void 温度随纬度升高且九类地表都能长出来()
+    {
+        var sim = Open(7);
+        var hexes = sim.World.OfKind("hex");
+        double north = hexes.Where(h => h.GetInt(F.HexR) <= 4).Average(h => h.GetInt(F.HexTemp));
+        double south = hexes.Where(h => h.GetInt(F.HexR) >= MapGen.MapRows - 5).Average(h => h.GetInt(F.HexTemp));
+
+        Assert.True(south > north + 40, $"北端均温 {north:0.0}、南端 {south:0.0}，纬度梯度不明显");
+        Assert.Equal(9, hexes.Select(h => h.GetStr(F.HexLandform)).Distinct(StringComparer.Ordinal).Count());
+    }
+
+
+    [Fact]
     public void 建图落在M2性能预算内()
     {
         // §12 M2 验收「32×20 生成 < 1s」。建图是 bootstrap，不在 15 步上（AI_HANDOFF 坑 7），

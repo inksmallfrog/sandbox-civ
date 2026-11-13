@@ -18,6 +18,14 @@
         "defense": "int",
         "buildable": "bool",
         "color": "str",
+        "class.priority": "int",
+        "class.height.min": "int",
+        "class.height.max": "int",
+        "class.temp.min": "int",
+        "class.temp.max": "int",
+        "class.rain.min": "int",
+        "class.rain.max": "int",
+        "class.edge": "bool",
         "note": "str"
       }
     },

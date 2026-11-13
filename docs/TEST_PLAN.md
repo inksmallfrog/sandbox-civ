@@ -2,7 +2,7 @@
 
 > 规范来源：GDD §10.8（七类测试与「每里程碑附一份基线报告」）、§12（里程碑验收）、
 > §5.9（不变量）、§10.7（确定性）、§14（风险表的触发阈值）。
-> 实现：`tests/SimCore.Tests/`（63 条，1196 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
+> 实现：`tests/SimCore.Tests/`（65 条，1230 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```bash
 dotnet build                # TreatWarningsAsErrors：警告就是错误
-dotnet test                 # 63 条
+dotnet test                 # 65 条
 dotnet run --project src/HexaCiv.Cli -- check                    # 数据包 + 插件清单
 dotnet run --project src/HexaCiv.Cli -- hash   --seed 99 --turns 50
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5  --turns 20 --at 12
@@ -41,7 +41,7 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 
 ---
 
-## 2. 63 条的分层清单
+## 2. 65 条的分层清单
 
 ### `FixTests.cs`（12 条）· 定点数本体
 
@@ -74,9 +74,11 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 `System.Text.Json` 一声不响地落回默认值 0——优先级、数据包开关这类字段静默失效，
 比崩溃难查一个数量级。现在未知键（`@` 前缀的注释键除外）直接拒载。
 
-### `CoreBasicTests.cs`（17 条）· 规则语义
+### `CoreBasicTests.cs`（19 条）· 规则语义
 
-**地图是32乘20且id与轴坐标互证** · **同种子同图换种子换图** · **建图落在M2性能预算内** ·
+**地图是32乘20且id与轴坐标互证** · **同种子同图换种子换图** ·
+**地表是GDD九类且每格都命中自己的气候区间** · **温度随纬度升高且九类地表都能长出来** ·
+**建图落在M2性能预算内** ·
 建城即有人有仓底有辖地 · 自动选址只会挑可建城的地块 · 驳回理由要说人话而不是抛异常 ·
 两城之间至少隔 3 格且辖地不重叠 · **产出等于公式一的两个上限取小** · 没有人口绝不出粮 ·
 农田折进设施系数且封顶 1_45 · 粮仓同时加仓容与降损耗 · 存粮永远不超过仓容 ·
@@ -113,7 +115,7 @@ dotnet run --project src/HexaCiv.Cli -- hash --seed 7 --turns 6 --script scripts
 Godot .NET 4.7.2 --headless --path src/GodotShell -- --smoke        # Windows 可用 AGENTS.md 中的完整路径
 ```
 
-两边都必须给出末回合哈希 `e0909883c6019fba`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
+两边都必须给出末回合哈希 `5e8fb72f798550d4`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
 `Smoke()` 提交的命令**逐字相同**，改一边就要改另一边，否则这条比对立刻红）。
 Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 点）、字体回退、`SMOKE PASS`。
 
@@ -168,7 +170,7 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 |---|---|---|
 | `build-test` | `dotnet build` + `dotnet test --no-build` | 单元/契约/验收任一红。注意 `Directory.Build.props` 里 `TreatWarningsAsErrors=true`，警告也算红 |
 | `sim-headless` | `sim check` → `sim hash --seed 99 --turns 50` → `sim replay --seed 5 --turns 20 --at 12` → `sim run --seed 42 --turns 200 --headless --out` 并上传报告 | 确定性、回放等价、或基线报告无法生成 |
-| `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `e0909883c6019fba`，并上传对账日志 |
+| `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `5e8fb72f798550d4`，并上传对账日志 |
 
 2026-11-13 在 Windows 宿主 #2 按上述步骤复验通过，两个 Godot 官方下载地址均返回 200。
 **远端首跑尚未执行，所以 M0 仍为 🟡，不能写成 CI 已绿。** CI 里第一个 Linux 绿的哈希必须当场抄进

@@ -96,27 +96,28 @@ data/
 
 ---
 
-## 4. M1 实际数据（`sim check` 打的就是这份）
+## 4. 当前实际数据（`sim check` 打的就是这份）
 
 ```
 数据包 E:\project\sandbox-civ\data
-  ✓ 14 条记录 / 1 个包（core.basic）
-  dataHash = af324b5a33571234
+  ✓ 18 条记录 / 1 个包（core.basic）
+  dataHash = eebed2c6f0ba30d1
     building   3 条：building.farm, building.granary, building.workshop
     class      1 条：class.peasant
     good       5 条：good.food, good.goods, good.lux, good.mat, good.silver
-    landform   5 条：landform.forest, landform.grassland, landform.hill, landform.mountain, landform.plain
+    landform   9 条：landform.coast, landform.desert, landform.forest, landform.grassland, landform.hill,
+                     landform.mountain, landform.plain, landform.tundra, landform.wetland
 ```
 
 （`dataHash` 是「id → 标量表规范化串」的 FNV 混合（`BuildDataHash`），
 它进存档头部也进不变量：**同数据不同 hash 说明有人改了数据包**，插件的行为必须跟着改。
-上面的数字是 M1 的实况，改数据后必须回来更新这一段——`sim check` 是它的生成源。）
+上面的数字是 M2 切片二之后的实况，改数据后必须回来更新这一段——`sim check` 是它的生成源。）
 
 各表的字段意图（数值本身属于 GDD §3.2/§4.3/§5.1/§5.7，改数走 `CHANGELOG-DESIGN`）：
 
-| 类型 | M1 用到的字段 | 谁读它 |
+| 类型 | 当前用到的字段 | 谁读它 |
 |---|---|---|
-| `landform` | `potential.food/mat`、`moveCost`、`defense`、`buildable`、`color` | `MapGen` 写进 `hex.*`；`color` 只给壳层 |
+| `landform` | `potential.food/mat`、`moveCost`、`defense`、`buildable`、`color`、`class.priority/height/temp/rain/edge` | `MapGen` 用 `class.*` 分类并写进 `hex.*`；`color` 只给壳层 |
 | `class` | `labor`、`output.food`、`consumes.food`、`satisfaction.expects/baseline`、`status`、`taxWeight`、`unlockPop` | `SeasonRules` 的公式一/三；`taxWeight` 目前只读不结算 |
 | `good` | `unit`、`basePrice`、`stockCapPerPop`、`spoilage`、`essential` | `TownOps`（仓容/损耗）；`basePrice` 到 M3 才进求解器 |
 | `building` | `slot`(`hex`/`town`)、`cost.food`、`upgradeCost.food`、`maxLevel`、`facility`、`stockCap`、`spoilageCut`、`maintenance.food`、`requiresPop`、`requiresBuilding` | `TownOps.Found/Build/Facilities` |

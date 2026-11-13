@@ -232,7 +232,7 @@ public partial class Main : Node2D
         var hex = _sim.World.Get(new EntityId(hexId));
         if (hex is null) { _hint.Text = ""; return; }
         string land = _sim.Data.TryGet(hex.GetStr("hex.landform"), out var lf) ? lf.GetStr("title") : "?";
-        _hint.Text = $"{hexId} {land} · 高度 {hex.GetInt("hex.height", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text}";
+        _hint.Text = $"{hexId} {land} · 高 {hex.GetInt("hex.height", 0)} · 温 {hex.GetInt("hex.temp", 0)} · 水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text}";
     }
 
     /// <summary>辖地格属于哪座城（只读字段，不判规则）。</summary>
@@ -354,7 +354,7 @@ public partial class Main : Node2D
             Add($"[b]— {_selectedHex} —[/b]");
             string land = _sim.Data.TryGet(hex.GetStr("hex.landform"), out var lf) ? lf.GetStr("title") : "?";
             Add($"  地表：{land}（可建城 {(hex.Get("hex.buildable").AsBool() ? "是" : "否")}）");
-            Add($"  高度 {hex.GetInt("hex.height", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text} · 行军 {hex.GetInt("hex.moveCost", 0)} · 防御 {hex.GetInt("hex.defense", 0)}");
+            Add($"  高度 {hex.GetInt("hex.height", 0)} · 温度 {hex.GetInt("hex.temp", 0)} · 降水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text} · 行军 {hex.GetInt("hex.moveCost", 0)} · 防御 {hex.GetInt("hex.defense", 0)}");
             int farm = (int)hex.GetInt("hex.building.farm", 0);
             if (farm > 0) Add($"  农田 {farm} 级");
             Add("");

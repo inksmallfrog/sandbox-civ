@@ -1,21 +1,40 @@
 {
   "@comment": [
-    "GDD §3.2 地表表的首批 5 行（平原/草原/森林/丘陵/山地），数值照抄该表。",
+    "GDD §3.2 地表表的全部 9 行（平原/草原/森林/丘陵/山地/湿地/荒漠/冻土/海岸），数值照抄该表。",
     "潜力是产能上限，不是白拿的产出：没有人口与设施，地块不生钱（§3.2 的提醒）。",
     "M1 未接形胜（§3.4）与资源（§3.5），所以 Y = 地表潜力本身；水利系数暂为 1.00，M2 的河流会把它换成 1.15。",
+    "class.* 是 §3.7 第 4 步的分类区间（高度/温度/降水，edge = 是否要求地图边缘）。",
+    "MapGen 按 class.priority 从高到低匹配，第一个命中的就是该格地表；区间必须铺满，空档会直接报错。",
     "color 给壳层上色用，模拟不读它——渲染参数写在数据里，改配色不用改代码。"
   ],
   "type": "landform",
   "entries": [
     { "id": "landform.plain",     "title": "平原", "@note": "最佳农地与建城地",
-      "potential.food": 3.00, "potential.mat": 0.00, "moveCost": 1, "defense": 0, "buildable": true,  "color": "#8fbf5a" },
+      "potential.food": 3.00, "potential.mat": 0.00, "moveCost": 1, "defense": 0, "buildable": true,  "color": "#8fbf5a",
+      "class.priority": 10, "class.height.min": 0, "class.height.max": 39, "class.rain.min": 51, "class.rain.max": 100 },
     { "id": "landform.grassland", "title": "草原", "@note": "农牧兼备，骑兵适地",
-      "potential.food": 2.00, "potential.mat": 1.00, "moveCost": 1, "defense": 0, "buildable": true,  "color": "#c3d06a" },
+      "potential.food": 2.00, "potential.mat": 1.00, "moveCost": 1, "defense": 0, "buildable": true,  "color": "#c3d06a",
+      "class.priority": 20, "class.height.min": 0, "class.height.max": 39, "class.rain.min": 23, "class.rain.max": 50 },
     { "id": "landform.forest",    "title": "森林", "@note": "伐木，步兵隐蔽",
-      "potential.food": 1.00, "potential.mat": 3.00, "moveCost": 2, "defense": 1, "buildable": true,  "color": "#4f874a" },
+      "potential.food": 1.00, "potential.mat": 3.00, "moveCost": 2, "defense": 1, "buildable": true,  "color": "#4f874a",
+      "class.priority": 30, "class.height.min": 40, "class.height.max": 59, "class.rain.min": 23, "class.rain.max": 100 },
     { "id": "landform.hill",      "title": "丘陵", "@note": "矿脉高发，远程视野 +1",
-      "potential.food": 1.00, "potential.mat": 2.00, "moveCost": 2, "defense": 1, "buildable": true,  "color": "#a08a5a" },
+      "potential.food": 1.00, "potential.mat": 2.00, "moveCost": 2, "defense": 1, "buildable": true,  "color": "#a08a5a",
+      "class.priority": 80, "class.height.min": 60, "class.height.max": 79 },
     { "id": "landform.mountain",  "title": "山地", "@note": "屏障，仅隘口/山谷可穿",
-      "potential.food": 0.00, "potential.mat": 3.00, "moveCost": 4, "defense": 2, "buildable": false, "color": "#6d6a72" }
+      "potential.food": 0.00, "potential.mat": 3.00, "moveCost": 4, "defense": 2, "buildable": false, "color": "#6d6a72",
+      "class.priority": 90, "class.height.min": 80, "class.height.max": 100 },
+    { "id": "landform.wetland",   "title": "湿地", "@note": "疫病风险，骑兵禁用",
+      "potential.food": 1.00, "potential.mat": 1.00, "moveCost": 3, "defense": -1, "buildable": true, "color": "#6f8f7f",
+      "class.priority": 40, "class.height.min": 0, "class.height.max": 30, "class.rain.min": 78, "class.rain.max": 100 },
+    { "id": "landform.desert",    "title": "荒漠", "@note": "商路与稀有矿",
+      "potential.food": 0.00, "potential.mat": 1.00, "moveCost": 2, "defense": 0, "buildable": true,  "color": "#d9c27c",
+      "class.priority": 50, "class.height.min": 0, "class.height.max": 59, "class.rain.min": 0, "class.rain.max": 22 },
+    { "id": "landform.tundra",    "title": "冻土", "@note": "低人口，皮毛",
+      "potential.food": 0.00, "potential.mat": 1.00, "moveCost": 2, "defense": 0, "buildable": true,  "color": "#b9c7cd",
+      "class.priority": 70, "class.height.min": 0, "class.height.max": 59, "class.temp.min": 0, "class.temp.max": 22 },
+    { "id": "landform.coast",     "title": "海岸", "@note": "可建港口，外贸入口",
+      "potential.food": 2.00, "potential.mat": 0.00, "moveCost": 1, "defense": 0, "buildable": true,  "color": "#d6c68f",
+      "class.priority": 60, "class.height.min": 0, "class.height.max": 25, "class.edge": true }
   ]
 }
