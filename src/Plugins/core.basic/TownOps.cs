@@ -103,6 +103,9 @@ public static class TownOps
         ctx.Mutate(town.Id, F.TownSat("class.peasant"), Fix.FromInt(55), "§4.2 满意度初值：基线 50 加一点新开荒的期待");
         ctx.Mutate(town.Id, F.TownStock("good.food"), FoundStockFood, "开城仓底，§5.4「先有粮才有人」");
         ctx.Mutate(town.Id, F.TownGrowth("class.peasant"), Fix.Zero, "人口增长的零头累积：不到 100 人不进位");
+        var good = ctx.Data.Get("good.food");
+        ctx.Mutate(town.Id, F.TownPrice("good.food"), good.GetFix("basePrice"),
+            "§5.3：建城时粮价初始化为基准价 p0 = 4.00 银/石");
 
         if (!nation.IsEmpty)
             ctx.Add(nation, F.NationStockFood, SimValue.Of(-FoundCostFood), $"§3.8 的建城成本，由 §5.5 的国库支付：{FoundCostFood.Text} 石粮");

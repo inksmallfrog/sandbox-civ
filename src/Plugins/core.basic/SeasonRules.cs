@@ -82,18 +82,21 @@ public static class SeasonRules
         Fix got = Fix.Min(have, want);
         Fix ration = want.IsZero ? Fix.One : Fix.Div(got, want);
         ctx.AddFix(town, F.TownStock("good.food"), -got, $"第 10 步口粮 −{got.Text} 石（需求 {want.Text}）");
+        ctx.Mutate(town, F.TownConsumed("good.food"), got, "§5.9 守恒：本期口粮消耗");
         ctx.Mutate(town, F.TownRation("class.peasant"), ration, "s_c = min(1, 实得/需求)（§4.2），公式三的输入");
 
         // 仓满抛洒：先按仓容截断，剩下的才对年损耗计息
         Fix left = have - got;
         Fix stockCap = ctx.GetFix(town, F.TownStockCap("good.food"), Fix.MaxValue);
+        Fix spilled = Fix.Zero;
         if (left > stockCap)
         {
-            Fix spilled = left - stockCap;
+            spilled = left - stockCap;
             ctx.Mutate(town, F.TownStock("good.food"), stockCap,
                 $"仓容 {stockCap.Text} 已满，抛洒 {spilled.Text} 石（§5.4 步 6：剩余物资留仓，仓满即抛）");
             left = stockCap;
         }
+        ctx.Mutate(town, F.TownSpilled("good.food"), spilled, "§5.9 守恒：仓满抛洒");
 
         Fix rate = ctx.GetFix(town, F.TownSpoilage("good.food"), Fix.Zero);
         Fix rotten = Fix.Mul(left, rate);
@@ -104,6 +107,7 @@ public static class SeasonRules
             // 全国合计走 report.*：第 15 步的年报直接读，不必再遍历一次仓库
             ctx.AddFix(World.GlobalId, F.ReportFoodRot, rotten, "年报：本年损耗合计");
         }
+        ctx.Mutate(town, F.TownSpoiled("good.food"), rotten, "§5.9 守恒：年损耗");
 
         if (ration < Fix.One)
             ctx.Note($"{ctx.GetStr(town, F.TownName)}：口粮只够 {Percent(got, want)}%（需求 {want.Text}，实得 {got.Text}，缺 {(want - got).Text} 石）");

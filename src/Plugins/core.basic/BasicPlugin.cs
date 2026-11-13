@@ -68,6 +68,10 @@ public sealed class BasicPlugin : IPlugin
         api.Require(HookPoint.OnProduction, 100, FanOut(HookPoint.OnProduction, F.KindTown, "agriculture", SimOrder.SlotPre));
         api.RequireFor(HookPoint.OnProduction, F.KindTown, 100, SeasonRules.Produce);
 
+        // 第 6 步首：城镇市场出清（公式二·本地层，α = 0.30）。落在 Summer 段、OnPriceForm 的 pre slot。
+        api.Require(HookPoint.OnPriceForm, 100, FanOut(HookPoint.OnPriceForm, F.KindTown, "market_local", SimOrder.SlotPre));
+        api.RequireFor(HookPoint.OnPriceForm, F.KindTown, 100, Pricing.Price);
+
         // 第 10 步首：口粮、满足率、仓满抛洒与年损耗。
         api.Require(HookPoint.OnConsumption, 100, FanOut(HookPoint.OnConsumption, F.KindTown, "consumption", SimOrder.SlotPre));
         api.RequireFor(HookPoint.OnConsumption, F.KindTown, 100, SeasonRules.Consume);
@@ -89,6 +93,9 @@ public sealed class BasicPlugin : IPlugin
 
         // ---- 4. 不变量：范围与符号。数值算错可以慢慢调，量纲破了必须当场崩（§5.9）----
         api.RegisterInvariant("basic.ranges", new[] { 2, 3, 10, 12, 13 }, Sanity);
+        // M3 新增：价格区间（第 6 步末校验）+ 物资守恒（第 10 步末校验）
+        api.RegisterInvariant("basic.price_bounds", new[] { 6 }, PriceBounds);
+        api.RegisterInvariant("basic.conservation", new[] { 10 }, Conservation);
 
         // ---- 5. 图层声明（§3.9：图层是纯查询，Core 只转述标题与顺序）----
         api.RegisterLayer("terrain", "地形", 10);
@@ -152,6 +159,70 @@ public sealed class BasicPlugin : IPlugin
         {
             Fix y = ctx.GetFix(hex.Id, F.HexYieldFood, Fix.Zero);
             if (y < Fix.Zero) bad.Add($"{hex.Id}：粮潜力 {y.Text} 为负（§3.6 的 Y_g 是非负数）");
+        }
+
+        return bad.Count == 0 ? InvariantResult.Ok : InvariantResult.Fail(bad.ToArray());
+    }
+
+    /// <summary>
+    /// 价格区间检查（GDD §5.9 第四条）。第 6 步末校验：
+    /// 每镇每种商品的价格必须在 [0.2 × p0 × κ, 5 × p0 × κ] 之间。
+    /// M3 阶段 κ 固定为 1.0，所以区间简化为 [0.2×p0, 5×p0]。
+    /// Pricing.Price 自己做了 clamp，所以正常跑不会触发这条——触发即说明有地方绕过了 Pricing 改价格。
+    /// </summary>
+    private static InvariantResult PriceBounds(IStepContext ctx)
+    {
+        var bad = new List<string>();
+
+        foreach (var good in ctx.Data.OfType(F.TypeGood))
+        {
+            Fix p0 = good.GetFix("basePrice");
+            if (p0.IsZero) continue;  // silver 不参与价格求解（§5.1）
+
+            Fix lo = Fix.Mul(p0, Fix.FromPercent(20));   // 0.2 × p0
+            Fix hi = Fix.Mul(p0, Fix.FromInt(5));          // 5 × p0
+
+            foreach (var town in ctx.EntitiesOfKind(F.KindTown))
+            {
+                Fix p = ctx.GetFix(town.Id, F.TownPrice(good.Id), Fix.Zero);
+                if (p.IsZero && good.Id != "good.food") continue;  // M3 只对 food 跑价格
+
+                if (p < lo || p > hi)
+                    bad.Add($"{ctx.GetStr(town.Id, F.TownName)}：{good.Id} 的价格 {p.Text} 越出 [{lo.Text}, {hi.Text}]（§5.9 的价格区间）");
+            }
+        }
+
+        return bad.Count == 0 ? InvariantResult.Ok : InvariantResult.Fail(bad.ToArray());
+    }
+
+    /// <summary>
+    /// 物资守恒检查（GDD §5.9 第一条）。第 10 步末校验：
+    ///   supply（期初库存 + 本期产出）= consumed + spoiled + spilled + stockAfter
+    /// 允许误差 0.02（Fix.Scale=100 精度 0.01，放宽 2 倍防定点截断抖动）。
+    /// supply 由第 6 步 Pricing 写入，consumed/spoiled/spilled 由第 10 步 Consume 写入。
+    /// </summary>
+    private static InvariantResult Conservation(IStepContext ctx)
+    {
+        var bad = new List<string>();
+        Fix tolerance = Fix.FromPercent(2);  // 0.02，定点精度的 2 倍
+
+        foreach (var town in ctx.EntitiesOfKind(F.KindTown))
+        {
+            string name = ctx.GetStr(town.Id, F.TownName);
+
+            // supply 由 Pricing 第 6 步写入：期初库存 + 本期产出
+            Fix supply = ctx.GetFix(town.Id, F.TownSupply("good.food"), Fix.Zero);
+            // stockAfter 由 Consume 第 10 步消费/损耗/抛洒后的期末库存
+            Fix stockAfter = ctx.GetFix(town.Id, F.TownStock("good.food"), Fix.Zero);
+            // consumed/spoiled/spilled 由 Consume 第 10 步分别写入
+            Fix consumed = ctx.GetFix(town.Id, F.TownConsumed("good.food"), Fix.Zero);
+            Fix spoiled = ctx.GetFix(town.Id, F.TownSpoiled("good.food"), Fix.Zero);
+            Fix spilled = ctx.GetFix(town.Id, F.TownSpilled("good.food"), Fix.Zero);
+
+            // 守恒：supply = stockAfter + consumed + spoiled + spilled
+            Fix diff = supply - stockAfter - consumed - spoiled - spilled;
+            if (diff.Raw < -tolerance.Raw || diff.Raw > tolerance.Raw)
+                bad.Add($"{name}：守恒破！supply {supply.Text} − stockAfter {stockAfter.Text} − consumed {consumed.Text} − spoiled {spoiled.Text} − spilled {spilled.Text} = {diff.Text}（§5.9 第一条物资守恒）");
         }
 
         return bad.Count == 0 ? InvariantResult.Ok : InvariantResult.Fail(bad.ToArray());
