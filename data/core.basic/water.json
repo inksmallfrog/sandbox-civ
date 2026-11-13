@@ -1,0 +1,16 @@
+{
+  "@comment": [
+    "GDD §3.1 的水体层与 §3.2 的水域行：湖 / 近海。水体是叠加在地表之上的层，",
+    "所以 hex.landform 仍然保留九类地表分类，hex.water 只回答「这一格是不是水」。",
+    "粮潜力照抄 §3.2 的水域行：湖 2、近海 1；深海（需航海科技）等 M7 的海军切片再进来。",
+    "水体格恒不可建城（§3.8：非山地/深海/冰川；这里把湖海一并排除），buildable 由 MapGen 写 false。",
+    "color 只给壳层上色用，模拟不读它——改配色不用改代码。"
+  ],
+  "type": "waterbody",
+  "entries": [
+    { "id": "water.lake", "title": "湖泊", "@note": "淡水，粮 2（§3.2 水域行）",
+      "potential.food": 2.00, "color": "#3f7fa6" },
+    { "id": "water.sea",  "title": "近海", "@note": "粮 1，港口与外贸入口（§3.2 水域行）",
+      "potential.food": 1.00, "color": "#2f5f86" }
+  ]
+}

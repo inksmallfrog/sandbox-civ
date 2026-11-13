@@ -62,7 +62,7 @@ sandbox-civ/
   data/
     _schema.json         每种数据包类型的字段与类型
     core.basic/          building.json / class.json / good.json / landform.json
-  tests/SimCore.Tests/   xUnit，65 条（单测 + §12 里程碑验收）
+  tests/SimCore.Tests/   xUnit，70 条（单测 + §12 里程碑验收）
   scripts/               demo.txt（命令脚本）、godot-smoke.txt（与窗口冒烟同流）
   analysis/out/          基线 CSV 报告（每个里程碑提交附一份）
   saves/                 回归样本档（.gitkeep，产物被 ignore）

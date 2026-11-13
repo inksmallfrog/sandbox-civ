@@ -10,7 +10,7 @@
 
 ## 0. 一分钟版
 
-- **M1 Core 已经立住，M2 的地图骨架（32×20）与九类地表/气候分类已完成，M0 只差 CI 首次远端双系统全绿**。三 job × ubuntu/windows 的工作流已补；65 条测试与宿主 #1 的基线当场复验过（§1 表格）。
+- **M1 Core 已经立住，M2 的地图骨架（32×20）、九类地表/气候分类与河网/水体已完成，M0 只差 CI 首次远端双系统全绿**。三 job × ubuntu/windows 的工作流已补；70 条测试与宿主 #1 的基线当场复验过（§1 表格）。
 - **接手第一件事不是写代码，是识别宿主并跑 §6 的复验命令**。按 `DEV_ENVIRONMENTS.md` 探测 OS、.NET SDK 与 Godot .NET 版本；有对不上的，先修环境再动代码——
   这个仓库的正确性主张全靠「同种子同命令流 → 同哈希」撑着，跑不出来时任何改动都无法判断好坏。
 - **读的顺序（§11.4 原文）**：本文件 → `AGENTS.md` → GDD §10 + 附录 A → 要动的子系统章节。
@@ -23,23 +23,23 @@
 ## 1. 仓库实况（2026-11-13 当场核对）
 
 > 宿主 #1 复核（2026-11-13）：.NET SDK 10.0.201（共享运行时含 8.0.25）；Godot .NET 4.7.2 位于
-> `E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`。构建、65 条测试、
-> `check/hash/replay`、200 年基线与 Godot `-- --smoke` 全部通过；CLI 与 Godot 末态哈希同为 `5e8fb72f798550d4`，
-> Godot 输出 `SMOKE PASS`、拾取 1920/1920。地图形状为 32×20，九类地表由数据里的气候区间分类，MapGenVersion=4；
-> 新基线见下表，旧地图的哈希全部作废（§3.7 明写的地图重排）。跨 OS 仍待 CI。
+> `E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`。构建、70 条测试、
+> `check/hash/replay`、200 年基线与 Godot `-- --smoke` 全部通过；CLI 与 Godot 末态哈希同为 `707c154e0930be52`，
+> Godot 输出 `SMOKE PASS`、拾取 1920/1920。地图形状为 32×20，九类地表由数据里的气候区间分类，
+> 河网/水体由 §3.7 第 3 步生成，MapGenVersion=5；新基线见下表，旧地图的哈希全部作废（§3.7 明写的地图重排）。跨 OS 仍待 CI。
 
 | 项 | 值 | 复现 |
 |---|---|---|
-| 分支 | `master` 与 `origin/master` 同步在 `097ca4c`（本机未设 upstream，按 `git pull --ff-only origin master` 快进） | `git branch -vv` / `git fetch origin` |
-| 工作区 | 本轮 M2 切片一改动（地图骨架 + 文档 + 规则）随 D-033 提交；以 status 为准 | `git status --short` |
-| 测试 | **65 绿，0 跳过** | `dotnet test --nologo` |
-| 确定性自检 | `48ca402a8e5a4ae5`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
-| 跨宿主末回合哈希 | `5e8fb72f798550d4`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值；`SMOKE PASS`，拾取 1920/1920 |
-| 快照往返 | `1ee5dcff0dd4127b`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
-| 续跑等价 | `b189d5e21b3eafab`（一口气跑满 = 存盘续跑） | 同上 |
-| 200 年基线 | seed 42 末态 `820efa76ba0f98b6`，`dataHash eebed2c6f0ba30d1`，2 城 / 人口 163 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` |
-| 建图耗时 | 约 41 ms / 640 格（§12 M2 判据 < 1000 ms） | `sim map --seed 7` 的 `core.basic：建图 … ms` |
-| 代码量 | SimCore 20 文件 / 3404 行 · core.basic 7 / 1074 · CLI/Godot 656/685 · 测试 1230 | 排除 `bin/obj` 后统计 `.cs` 行 |
+| 分支 | 本轮基线是 `origin/master` 的 `cc30e0a`；M2 切片三提交后本地领先 1 个提交，尚未推送（本机未设 upstream） | `git branch -vv` / `git fetch origin` |
+| 工作区 | 本轮 M2 切片三改动（河网 + 水体 + 文档 + 规则）随 D-035 提交；以 status 为准 | `git status --short` |
+| 测试 | **70 绿，0 跳过** | `dotnet test --nologo` |
+| 确定性自检 | `d8e2fb8206d7544f`（seed 99 / 50 回合，两遍逐回合全同） | `sim hash --seed 99 --turns 50` |
+| 跨宿主末回合哈希 | `707c154e0930be52`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`） | CLI `sim hash` 与 Godot 4.7.2 `-- --smoke` 两边同值；`SMOKE PASS`，拾取 1920/1920 |
+| 快照往返 | `1403936053e8ccf5`（seed 5 / 20 回合 / 第 12 回合存盘） | `sim replay --seed 5 --turns 20 --at 12` |
+| 续跑等价 | `18546b1d4f2d1866`（一口气跑满 = 存盘续跑） | 同上 |
+| 200 年基线 | seed 42 末态 `fae9549e734a3908`，`dataHash 854a0facb520c4ee`，2 城 / 人口 164 | `sim run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` |
+| 建图耗时 | 约 55 ms / 640 格（§12 M2 判据 < 1000 ms） | `sim map --seed 7` 的 `core.basic：建图 … ms` |
+| 代码量 | SimCore 20 文件 / 3404 行 · core.basic 7 / 1273 · CLI/Godot 668/720 · 测试 1343 | 排除 `bin/obj` 后统计 `.cs` 行 |
 
 **上面每一个数字都是这次会话里重跑出来的**，不是从旧文档抄的。改动作废它们不算违约，
 但请把 §6 那六条命令当作收工自检跑一遍，把新值写回 `docs/ROADMAP.md` §2 和这里。
@@ -69,17 +69,21 @@
 
 ### 2.2 core.basic（M1 循环的全部规则都在这一个插件里）
 
-32×20 矩形六边形图（§3.7 前四步：高度 / 温度 / 降水 / 九类地表，§3.9）→ 建国 → 建城（§3.8 距离闸门）→ 开荒 / 起仓 →
+32×20 矩形六边形图（§3.7 前四步：高度 / 温度 / 降水 / 九类地表，§3.9；§3.1 水体 + §3.3 河网）→ 建国 → 建城（§3.8 距离闸门）→ 开荒 / 起仓 →
 产粮（公式一，§5.4 步 6 损耗）→ 吃粮 → 配给 → 满意度（公式三 + 正态扰动）→ 人口
 （零头桶累积）→ 不安与反抗计数 → 年报。三条公式实装两条（价格没有），21 个落点里挂了 11 个
 处理器，3 条命令，1 组不变量，3 个图层。逐条常数与解析解在 `BALANCE.md` §1/§3。
 
+水体与河网不是两套地形：`hex.landform` 仍是九类地表，`hex.water` 是叠加层（湖/近海），
+`hex.river.down/flow/width` 是 §3.3 的有向边（存在上游格上）。水体格不可建城、不进辖地；
+河/湖相邻的陆格 Y_g × 1.15（§3.6）。这三条都在不变量里，别只靠壳层提示。
+
 ### 2.3 两个壳层
 
-- **CLI**（`src/HexaCiv.Cli`，656 行）：`run / check / hash / map / peek / replay / help` 六个动词 +
+- **CLI**（`src/HexaCiv.Cli`，668 行）：`run / check / hash / map / peek / replay / help` 六个动词 +
   `--seed --turns --at --out --save --load --script --data --plugins --no-plugins --no-data --steps --explain --lenient --quiet`。
   动词表在 `Program.cs:15` 的 `UsageText`，改参数别只改代码。
-- **GodotShell**（`src/GodotShell`，687 行）：六边形绘制 + 点格建城 + 侧栏 + 年报 + `-- --smoke`
+- **GodotShell**（`src/GodotShell`，720 行）：六边形绘制 + 点格建城 + 侧栏 + 年报 + 河段/水体渲染与 `-- --smoke`
   headless 自检（含 640 格 × 3 点拾取命中与字体诊断）。**刻意不进 `.sln`**，理由见 `ARCH.md` §5。
 
 ---
@@ -94,6 +98,7 @@
 | 本轮 CI | 三 job × ubuntu/windows 工作流 + Windows #2 等价复验 + 更正 seed 99 文档基线 | D-032（补漏记基线）；CI 本身数值零变化 |
 | 本轮 M2-1 | 地图 32×20 矩形 + `MapGenVersion=3` + `sim map` 建图计时 + Godot 缩放/拾取适配 + 3 条地图测试 | D-033（附全基线重排表） |
 | 本轮 M2-2 | 九类地表 + 温度/降水分类（数据声明 class.* 区间）+ `MapGenVersion=4` + 2 条气候测试 | D-034（附全基线重排表） |
+| 本轮 M2-3 | 河网（§3.3 有向边）+ 水体层（§3.1 湖/近海）+ 水利系数 1.15 + `MapGenVersion=5` + 5 条河网/水体测试 | D-035（附全基线重排表） |
 
 D-020 是 M1 阶段唯一的**行为变更**：`SeasonRules.Demography` 里 `0.04 × 粮安` 只有 0.00xx 量级，
 在 ×100 定点下 `粮安 ≤ 0.62` 时被截成 0，乘回人口还是 0，于是人口永久卡在地块上限。
@@ -102,7 +107,8 @@ D-020 是 M1 阶段唯一的**行为变更**：`SeasonRules.Demography` 里 `0.0
 
 D-033 是本轮的**地图重排**：格数 61 → 640，所有地图相关哈希与 200 年基线整体换值；
 D-034 再把地表扩到 §3.2 的九类并接入温度/降水分类，所有地图哈希再次整体换值。
-存档仍能读回（快照自带地图数据），但新开局不再长旧图。逐项差异见 `CHANGELOG-DESIGN.md` D-033 / D-034。
+D-035 加上河网与水体：河/湖相邻的陆格 Y_g × 1.15，200 年基线的人口与产粮因此小幅上移。
+存档仍能读回（快照自带地图数据），但新开局不再长旧图。逐项差异见 `CHANGELOG-DESIGN.md` D-033 / D-034 / D-035。
 
 ---
 
@@ -113,8 +119,8 @@ D-034 再把地表扩到 §3.2 的九类并接入温度/降水分类，所有地
 | 1 | **CI 首验**（工作流已补，M0 只剩实际运行证据） | 推送后三个 job 在 ubuntu + windows 上都绿；把首个 Linux 哈希写回文档；M0 才打 `v0.0` | `TEST_PLAN.md` §6 |
 | 2 | 根 `Readme.md` 已补齐；三台宿主探测指南见 `DEV_ENVIRONMENTS.md` | 玩家视角：一条命令跑起来 + 一张截图 + 指回 `AGENTS.md`；主机 #1 与 Mac 的工具链信息待首次实测补录 | `CHANGELOG-DESIGN.md` D-004 |
 | 3 | tag `v0.0`（M0）/ `v0.1`（M1）+ `master` → `main` 改名 | §11.2 的 tag 表；`v0.2` 的语义冲突挂在 D-001 | `CHANGELOG-DESIGN.md` §1 |
-| 4 | **M2 地图**：形状、计时、九类地表与温度/降水已完成；剩余河网 / 形胜 / 门槛资源 / 图层 4–5 | §3.7 六步全跑 + 三条验收各给得出证据 | `ROADMAP.md` §3 |
-| 5 | M2 后续接口：`Siting.BestTownSite` 接形胜与资源、`CoreInfo.MapGenVersion` 随算法继续递增（当前 4） | 旧种子旧图必须仍然可复现，或明确记录重排 | `ROADMAP.md` §3 |
+| 4 | **M2 地图**：形状、计时、九类地表与温度/降水、河网与水体已完成；剩余 12 种形胜 / 门槛资源 / 图层 4–5 | §3.7 六步全跑 + 三条验收各给得出证据 | `ROADMAP.md` §3 |
+| 5 | M2 后续接口：`Siting.BestTownSite` 接形胜与资源、`CoreInfo.MapGenVersion` 随算法继续递增（当前 5） | 旧种子旧图必须仍然可复现，或明确记录重排 | `ROADMAP.md` §3 |
 
 ---
 
@@ -179,7 +185,7 @@ CLI 用默认 `AssemblyLoadContext`，Godot 用它自己的脚本上下文；把
 
 **坑 11 — 跨宿主一致性不在 `dotnet test` 里，要手动跑两条。**
 `sim hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` 与
-`godot --headless --path src/GodotShell -- --smoke` 必须同为 `5e8fb72f798550d4`（MapGenVersion=4）。
+`godot --headless --path src/GodotShell -- --smoke` 必须同为 `707c154e0930be52`（MapGenVersion=5）。
 改 `Main.cs` 的 `Smoke()` 参数**必须同步改 `scripts/godot-smoke.txt`**，两边逐字相同才有意义（`TEST_PLAN.md` §3）。
 
 **坑 12 — GodotShell 不在 `.sln` 里**：`dotnet build` 不编它，验收要靠 Godot 可执行文件单独跑
@@ -210,8 +216,16 @@ smoke 会打 `FallbackFont=FontFile FallbackFontSize=16`。没装 CJK 字体的�
 
 **坑 18 — 地图生成曾用浮点中间量（已修复）。** `MapGen.Bootstrap` 以整数定点噪声写入 `hex.height` / `hex.temp` / `hex.rain` / `hex.landform`；
 M2 切片一改成 32×20 矩形（MapGenVersion=3），切片二接九类地表与气候分类（MapGenVersion=4），
-旧地图哈希全部重排（预期行为）。MapGenVersion=4 已在宿主 #1 用 Godot 4.7.2 复验 CLI/Godot 同哈希
-（`5e8fb72f798550d4`，`SMOKE PASS`），跨 OS 对账仍待 CI。
+切片三接河网与水体（MapGenVersion=5），旧地图哈希全部重排（预期行为）。MapGenVersion=5 已在宿主 #1
+用 Godot 4.7.2 复验 CLI/Godot 同哈希（`707c154e0930be52`，`SMOKE PASS`），跨 OS 对账仍待 CI。
+
+**坑 19 — 水体是叠加层，不是第十类地表。** 如果为了画海把 `hex.landform` 设成 `water.sea`，
+九类地表的数据规则、气候区间测试与所有按地表读潜力的规则都要再写一遍。正确做法是
+`hex.landform` 保留九类、`hex.water` 只回答「是不是水」，Y 由 `water.*` 覆盖，可建城/辖地读 `hex.water` 排除。
+
+**坑 20 — 河网阈值不是越大越好，也不是越小越好。** 用优先淹没法时，`RiverMinFlow=2` 会让 32×20 上
+336 段河、一半陆格吃到 1.15，水利系数失去区分度；切片三最终取 12（53 段）。湖泊阈值单独取 2（4 个湖），
+否则洼地太少、一个湖都长不出来。改这两个常数会再次重排全部地图哈希，必须进 CHANGELOG。
 
 ---
 
@@ -219,7 +233,7 @@ M2 切片一改成 32×20 矩形（MapGenVersion=3），切片二接九类地表
 
 ```bash
 dotnet build -v q --nologo                          # 0 错误（warning = error，坑 9）
-dotnet test --nologo                                # 65 绿
+dotnet test --nologo                                # 70 绿
 dotnet build src/GodotShell/HexaCiv.GodotShell.csproj # GodotShell 不在 solution，单独编译以免加载旧 DLL
 dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 7 --turns 6 --script scripts/godot-smoke.txt
 dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12

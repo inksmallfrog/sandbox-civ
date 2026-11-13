@@ -16,7 +16,7 @@ Godot 版本基准以 `src/GodotShell/HexaCiv.GodotShell.csproj` 中的 SDK 版�
 
 | 宿主 | 已知信息 | 开工判断 |
 |---|---|---|
-| #1 原 Windows 宿主 | 2026-11-13 实测：.NET SDK `10.0.201`（`C:\Program Files\dotnet`，共享运行时含 8.0.25）；**Godot .NET 4.7.2 已装**：`E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`（`4.7.2.stable.mono.official.ed1daf0bf`）。 | `dotnet build/test/check/hash/replay` 与 Godot `-- --smoke` 均已通过；smoke 输出 `SMOKE PASS`、拾取 1920/1920、末态哈希 `5e8fb72f798550d4`（与 CLI 同值）。 |
+| #1 原 Windows 宿主 | 2026-11-13 实测：.NET SDK `10.0.201`（`C:\Program Files\dotnet`，共享运行时含 8.0.25）；**Godot .NET 4.7.2 已装**：`E:\devenv\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`（`4.7.2.stable.mono.official.ed1daf0bf`）。 | `dotnet build/test/check/hash/replay` 与 Godot `-- --smoke` 均已通过；smoke 输出 `SMOKE PASS`、拾取 1920/1920、末态哈希 `707c154e0930be52`（与 CLI 同值）。 |
 | #2 现 Windows 宿主 | **已验证** Godot .NET 4.7.2：`D:\Applications\Godot_v4.7.2-stable_mono_win64\Godot_v4.7.2-stable_mono_win64.exe`；.NET SDK 8.0.428：`C:\Program Files\dotnet\dotnet.exe`。2026-11-13 构建、测试与 Godot smoke 通过。 | 如果 `dotnet` 或 `godot` 不在 PATH，可在当前终端临时使用上述完整路径；不要把绝对路径写入提交的脚本或项目文件。 |
 | #3 Mac 宿主 | 尚未探测；macOS 版本、CPU 架构、.NET SDK、Godot 安装路径/版本均待确认。 | 首次使用按 macOS 探测步骤记录结果；使用与本机 CPU 匹配的 Godot .NET 4.7.2 和 .NET SDK。 |
 
@@ -86,8 +86,8 @@ dotnet build src/GodotShell/HexaCiv.GodotShell.csproj
 godot --headless --path src/GodotShell -- --smoke
 ```
 
-当前基线（2026-11-13，MapGenVersion=4 / 32×20 / 九类地表）：65 项测试通过；CLI 与 Godot .NET 4.7.2 smoke
-在宿主 #1 同为末态哈希 `5e8fb72f798550d4`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`），
+当前基线（2026-11-13，MapGenVersion=5 / 32×20 / 九类地表 + 河网水体）：70 项测试通过；CLI 与 Godot .NET 4.7.2 smoke
+在宿主 #1 同为末态哈希 `707c154e0930be52`（seed 7 / 6 回合 / `scripts/godot-smoke.txt`），
 Godot 侧输出 `SMOKE PASS`、拾取 `1920/1920`（640 格 × 3 点）。Godot smoke 必须在输出中出现 `SMOKE PASS`，
 单看退出码不算通过。首次在 Mac 验收时，记录 OS/CPU 架构、SDK 版本、Godot 版本和实际输出；
 若哈希不同，先确认代码提交一致、插件 DLL 已由构建更新，再定位跨平台问题，不要直接改基线。

@@ -389,7 +389,7 @@ class PluginHost { IReadOnlyList<LoadedPlugin> Loaded; IReadOnlyList<string> Loa
                    void LoadFromAssemblies(assemblies, IPluginRegistrar);
                    IReadOnlyList<string> DescribeLoaded(); }
 static class CoreInfo { ApiVersion "1.0"; ApiMajor 1; ApiMinor 0; SchemaVersion 1; GameVersion "0.1.0";
-                        MapGenVersion 4; string Describe }
+                        MapGenVersion 5; string Describe }
 ```
 
 - `PluginManifest.TryRead` 会**拒绝未知键**（`@` 开头的除外）。这是防「驼峰键静默落回默认值」，

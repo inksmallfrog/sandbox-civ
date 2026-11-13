@@ -100,24 +100,26 @@ data/
 
 ```
 数据包 E:\project\sandbox-civ\data
-  ✓ 18 条记录 / 1 个包（core.basic）
-  dataHash = eebed2c6f0ba30d1
+  ✓ 20 条记录 / 1 个包（core.basic）
+  dataHash = 854a0facb520c4ee
     building   3 条：building.farm, building.granary, building.workshop
     class      1 条：class.peasant
     good       5 条：good.food, good.goods, good.lux, good.mat, good.silver
     landform   9 条：landform.coast, landform.desert, landform.forest, landform.grassland, landform.hill,
                      landform.mountain, landform.plain, landform.tundra, landform.wetland
+    waterbody  2 条：water.lake, water.sea
 ```
 
 （`dataHash` 是「id → 标量表规范化串」的 FNV 混合（`BuildDataHash`），
 它进存档头部也进不变量：**同数据不同 hash 说明有人改了数据包**，插件的行为必须跟着改。
-上面的数字是 M2 切片二之后的实况，改数据后必须回来更新这一段——`sim check` 是它的生成源。）
+上面的数字是 M2 切片三之后的实况，改数据后必须回来更新这一段——`sim check` 是它的生成源。）
 
 各表的字段意图（数值本身属于 GDD §3.2/§4.3/§5.1/§5.7，改数走 `CHANGELOG-DESIGN`）：
 
 | 类型 | 当前用到的字段 | 谁读它 |
 |---|---|---|
 | `landform` | `potential.food/mat`、`moveCost`、`defense`、`buildable`、`color`、`class.priority/height/temp/rain/edge` | `MapGen` 用 `class.*` 分类并写进 `hex.*`；`color` 只给壳层 |
+| `waterbody` | `potential.food`、`color` | `MapGen` 写进 `hex.water` 并覆盖该格 `hex.yield.food`（§3.2 水域行）；`color` 只给壳层 |
 | `class` | `labor`、`output.food`、`consumes.food`、`satisfaction.expects/baseline`、`status`、`taxWeight`、`unlockPop` | `SeasonRules` 的公式一/三；`taxWeight` 目前只读不结算 |
 | `good` | `unit`、`basePrice`、`stockCapPerPop`、`spoilage`、`essential` | `TownOps`（仓容/损耗）；`basePrice` 到 M3 才进求解器 |
 | `building` | `slot`(`hex`/`town`)、`cost.food`、`upgradeCost.food`、`maxLevel`、`facility`、`stockCap`、`spoilageCut`、`maintenance.food`、`requiresPop`、`requiresBuilding` | `TownOps.Found/Build/Facilities` |

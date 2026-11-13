@@ -35,19 +35,29 @@ public static class AsciiMap
         }
 
         sb.AppendLine();
-        sb.AppendLine("图例：大写=无主格，小写=已入辖地，@=城址；字母取自地表 id 短名首字母");
+        sb.AppendLine("图例：大写=无主格，小写=已入辖地，@=城址，~=水域（湖/近海），+=河段（§3.3 有向边）；字母取自地表 id 短名首字母");
         foreach (var lf in sim.Data.OfType("landform"))
             sb.AppendLine($"  {Initial(lf.Id)} = {lf.GetStr("title")}（Y粮 {lf.GetFix("potential.food").Text}，可建城 {(lf.Get("buildable").AsBool() ? "是" : "否")}）");
+        foreach (var wb in sim.Data.OfType("waterbody"))
+            sb.AppendLine($"  ~ = {wb.GetStr("title")}（Y粮 {wb.GetFix("potential.food").Text}，不可建城）");
 
         var tally = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        var waterTally = new SortedDictionary<string, long>(StringComparer.Ordinal);
+        int rivers = 0;
         foreach (var h in world.OfKind("hex"))
         {
             string key = h.GetStr("hex.landform");
             tally[key] = tally.GetValueOrDefault(key) + 1;
+            string water = h.GetStr("hex.water");
+            if (water.Length > 0) waterTally[water] = waterTally.GetValueOrDefault(water) + 1;
+            if (h.GetStr("hex.river.down").Length > 0) rivers++;
         }
         sb.AppendLine();
         sb.AppendLine($"共 {world.OfKind("hex").Count} 格：" +
                       string.Join("、", tally.Select(kv => $"{sim.Data.Get(kv.Key).GetStr("title")} {kv.Value}")));
+        sb.AppendLine($"水域 " + string.Join("、", waterTally.Select(kv =>
+                          $"{sim.Data.Get(kv.Key).GetStr("title")} {kv.Value} 格")) +
+                      $"；河段 {rivers} 段（§3.3）");
         return sb.ToString();
     }
 
@@ -56,6 +66,8 @@ public static class AsciiMap
         string land = hex.GetStr("hex.landform");
         string glyph = Initial(land);
         if (!string.IsNullOrEmpty(hex.GetStr("hex.town"))) return "@";
+        if (!string.IsNullOrEmpty(hex.GetStr("hex.water"))) return "~";
+        if (!string.IsNullOrEmpty(hex.GetStr("hex.river.down"))) return "+";
         if (!string.IsNullOrEmpty(hex.GetStr("hex.owner"))) return glyph.ToLowerInvariant();
         return glyph;
     }

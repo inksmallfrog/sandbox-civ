@@ -96,6 +96,7 @@ public sealed class BasicPlugin : IPlugin
         api.RegisterLayer("agriculture", "农业潜力", 30);
 
         api.Log($"数据：{api.Data.OfType(F.TypeLandform).Count} 种地表 / " +
+                $"{api.Data.OfType(F.TypeWaterbody).Count} 种水体 / " +
                 $"{api.Data.OfType(F.TypeClass).Count} 个阶级 / " +
                 $"{api.Data.OfType(F.TypeGood).Count} 种物资 / " +
                 $"{api.Data.OfType(F.TypeBuilding).Count} 类建筑");
@@ -152,6 +153,36 @@ public sealed class BasicPlugin : IPlugin
         {
             Fix y = ctx.GetFix(hex.Id, F.HexYieldFood, Fix.Zero);
             if (y < Fix.Zero) bad.Add($"{hex.Id}：粮潜力 {y.Text} 为负（§3.6 的 Y_g 是非负数）");
+
+            string waterId = ctx.GetStr(hex.Id, F.HexWater);
+            if (!F.IsBlank(waterId))
+            {
+                if (!ctx.Data.TryGet(waterId, out var waterDef) || waterDef.Type != F.TypeWaterbody)
+                    bad.Add($"{hex.Id}：水体 '{waterId}' 不是已知的 waterbody 记录（§3.1）");
+                else
+                {
+                    if (ctx.Get(hex.Id, F.HexBuildable).AsBool())
+                        bad.Add($"{hex.Id}：{waterDef.GetStr("title")}却标成可建城（§3.8：水域不是城址）");
+                    Fix expected = waterDef.GetFix("potential.food");
+                    if (y != expected)
+                        bad.Add($"{hex.Id}：{waterDef.GetStr("title")}粮潜力 {y.Text}，数据里是 {expected.Text}（§3.2 水域行）");
+                }
+                if (!F.IsBlank(ctx.GetStr(hex.Id, F.HexRiverDown)))
+                    bad.Add($"{hex.Id}：水体格不该再有下游河段（§3.3 河到湖/海为止）");
+                continue;
+            }
+
+            string down = ctx.GetStr(hex.Id, F.HexRiverDown);
+            if (F.IsBlank(down)) continue;
+            var target = new EntityId(down);
+            if (!ctx.Has(target))
+                bad.Add($"{hex.Id}：下游 {down} 不存在（§3.3 有向边必须两点都在图上）");
+            else if (MapGen.Distance(hex.Id, target) != 1)
+                bad.Add($"{hex.Id}：下游 {down} 不相邻（§3.3 河段只连相邻地块）");
+            long flow = ctx.GetInt(hex.Id, F.HexRiverFlow);
+            if (flow < 1) bad.Add($"{hex.Id}：河段 flow = {flow} 非法（§3.3 集水数至少 1）");
+            long width = ctx.GetInt(hex.Id, F.HexRiverWidth);
+            if (width is < 1 or > 4) bad.Add($"{hex.Id}：河宽档 {width} 越界（1–4）");
         }
 
         return bad.Count == 0 ? InvariantResult.Ok : InvariantResult.Fail(bad.ToArray());

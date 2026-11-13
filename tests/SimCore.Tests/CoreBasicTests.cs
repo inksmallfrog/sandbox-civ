@@ -128,6 +128,135 @@ public class CoreBasicTests
             $"32×20 建图耗时 {sw.ElapsedMilliseconds} ms，§12 M2 判据是 < 1000 ms");
     }
 
+    [Fact]
+    public void 河流每条有向边都连相邻格且最终入海或湖()
+    {
+        // §3.3：河 = 一组边 {from, to, flow, width}；§3.7：河流必须入海或入湖，不许断头、不许成环。
+        var sim = Open(7);
+        var byId = sim.World.OfKind("hex").ToDictionary(h => h.Id.Value, h => h, StringComparer.Ordinal);
+        int riverTiles = 0;
+
+        foreach (var hex in byId.Values)
+        {
+            string down = hex.GetStr(F.HexRiverDown);
+            if (down.Length == 0) continue;
+            riverTiles++;
+
+            var target = new EntityId(down);
+            Assert.True(byId.ContainsKey(down), $"{hex.Id} 的下游 {down} 不存在");
+            Assert.Equal(1, MapGen.Distance(hex.Id, target));               // 河段只连相邻地块
+            Assert.True(hex.GetInt(F.HexRiverFlow) >= 2, $"{hex.Id} 的 flow = {hex.GetInt(F.HexRiverFlow)}");
+            Assert.InRange(hex.GetInt(F.HexRiverWidth), 1, 4);
+            Assert.Equal("", hex.GetStr(F.HexWater));                        // 水体格不该再挂河段
+
+            var cur = hex;
+            int guard = 0;
+            while (cur.GetStr(F.HexWater).Length == 0)
+            {
+                string next = cur.GetStr(F.HexRiverDown);
+                Assert.False(next.Length == 0,
+                    $"{hex.Id} 出发的河在 {cur.Id} 断了：§3.7 要求每条河最终入海或入湖");
+                cur = byId[next];
+                Assert.True(++guard <= MapGen.MapColumns * MapGen.MapRows, $"{hex.Id} 出发的河成环了");
+            }
+        }
+
+        Assert.True(riverTiles > 0, "seed 7 一段河都没长出来");
+        Assert.Equal(riverTiles, sim.World.GetInt(World.GlobalId, "meta.mapRivers", 0));
+    }
+
+    [Fact]
+    public void 水体按数据取粮潜力且不可建城()
+    {
+        // §3.1 水体层 + §3.2 水域行 + §3.8（水域不是城址）。
+        var sim = Open(7);
+        var hexes = sim.World.OfKind("hex");
+        int waterTiles = 0;
+
+        foreach (var hex in hexes)
+        {
+            string waterId = hex.GetStr(F.HexWater);
+            if (waterId.Length == 0) continue;
+            waterTiles++;
+
+            var def = sim.Data.Get(waterId);
+            Assert.Equal(F.TypeWaterbody, def.Type);
+            Assert.Equal(def.GetFix("potential.food"), hex.GetFix(F.HexYieldFood));
+            Assert.False(hex.Get(F.HexBuildable).AsBool(), $"{hex.Id} 是 {def.GetStr("title")}，却被标成可建城");
+            Assert.Equal("", hex.GetStr(F.HexRiverDown));
+        }
+
+        Assert.True(waterTiles > 0, "seed 7 没有水体");
+        Assert.Equal(waterTiles, sim.World.GetInt(World.GlobalId, "meta.mapWater", 0));
+
+        // 地图最外一圈是近海（§3.1）：矩形边界上 100 格都该是水。
+        for (int col = 0; col < MapGen.MapColumns; col++)
+            foreach (int row in new[] { 0, MapGen.MapRows - 1 })
+                Assert.False(string.IsNullOrEmpty(sim.World.GetStr(MapGen.HexIdAt(col, row), F.HexWater, "")),
+                    $"{MapGen.HexIdAt(col, row)} 在地图边缘却不是海");
+        for (int row = 1; row < MapGen.MapRows - 1; row++)
+            foreach (int col in new[] { 0, MapGen.MapColumns - 1 })
+                Assert.False(string.IsNullOrEmpty(sim.World.GetStr(MapGen.HexIdAt(col, row), F.HexWater, "")),
+                    $"{MapGen.HexIdAt(col, row)} 在地图边缘却不是海");
+    }
+
+    [Fact]
+    public void 河湖相邻的陆地格享受水利系数()
+    {
+        // §3.6：水利系数 = 河/湖相邻 1.15；水体格自己走水体数据，不叠这一层。
+        var sim = Open(7);
+        var hexes = sim.World.OfKind("hex");
+        var byId = hexes.ToDictionary(h => h.Id.Value, h => h, StringComparer.Ordinal);
+
+        // 测试侧独立重算「哪些格挨着河/湖」，不复用 MapGen 的中间结果。
+        var wet = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var hex in hexes)
+        {
+            string down = hex.GetStr(F.HexRiverDown);
+            if (down.Length > 0) { wet.Add(hex.Id.Value); wet.Add(down); }
+        }
+        foreach (var hex in hexes.Where(h => h.GetStr(F.HexWater) == "water.lake"))
+        {
+            var (q, r) = MapGen.Coords(hex.Id);
+            foreach (var (dq, dr) in MapGen.Neighbors)
+                if (byId.TryGetValue(MapGen.HexId(q + dq, r + dr).Value, out var nb)
+                    && nb.GetStr(F.HexWater).Length == 0)
+                    wet.Add(nb.Id.Value);
+        }
+
+        foreach (var hex in hexes)
+        {
+            if (hex.GetStr(F.HexWater).Length > 0) continue;
+            Fix potential = sim.Data.Get(hex.GetStr(F.HexLandform)).GetFix("potential.food");
+            Fix expected = wet.Contains(hex.Id.Value) ? Fix.Mul(potential, Fix.FromPercent(115)) : potential;
+            Assert.Equal(expected, hex.GetFix(F.HexYieldFood));
+        }
+    }
+
+    [Fact]
+    public void 同种子同河网换种子换河网()
+    {
+        static string Fingerprint(Simulation sim) => string.Join(";", sim.World.OfKind("hex")
+            .Select(h => $"{h.Id.Value}={h.GetStr(F.HexRiverDown)}/{h.GetInt(F.HexRiverFlow, 0)}/{h.GetStr(F.HexWater)}"));
+
+        Assert.Equal(Fingerprint(Open(7)), Fingerprint(Open(7)));
+        Assert.NotEqual(Fingerprint(Open(7)), Fingerprint(Open(8)));
+    }
+
+    [Fact]
+    public void 自动选址与辖地都不会落在水域()
+    {
+        foreach (ulong seed in new ulong[] { 7, 9, 13, 17 })
+        {
+            var sim = OneTown(seed);
+            var town = Town(sim);
+            var site = F.IdOf(town.GetStr(F.TownSite));
+            Assert.Equal("", sim.World.GetStr(site, F.HexWater, ""));
+            Assert.All(Tiles(sim, town.Id), t =>
+                Assert.Equal("", sim.World.GetStr(t.Id, F.HexWater, "")));
+        }
+    }
+
     // ================= 建城（§3.8 / §3.6 / §4.1）=================
 
     [Fact]

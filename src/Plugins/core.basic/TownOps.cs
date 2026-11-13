@@ -49,8 +49,9 @@ public static class TownOps
 
         if (!ctx.Data.TryGet(ctx.GetStr(hex, F.HexLandform), out var landform))
             return CommandResult.Reject(cmd, $"{hex} 的地表记录 '{ctx.GetStr(hex, F.HexLandform)}' 找不到，无法判断可否建城");
-        if (!landform.Get("buildable").AsBool())
-            return CommandResult.Reject(cmd, $"{landform.GetStr("title")}不可建城（§3.2：山地只能做隘口，不是城址）");
+        if (!ctx.Get(hex, F.HexBuildable).AsBool())
+            return CommandResult.Reject(cmd,
+                $"{landform.GetStr("title")}{(F.IsBlank(ctx.GetStr(hex, F.HexWater)) ? "" : "（水域）")}不可建城（§3.2：山地只能做隘口，不是城址；§3.1：湖海同样不是陆地）");
         if (!F.IsBlank(ctx.GetStr(hex, F.HexTown)))
             return CommandResult.Reject(cmd, $"{hex} 已经有城：{ctx.GetStr(hex, F.HexTown)}");
         if (!F.IsBlank(ctx.GetStr(hex, F.HexOwner)))
@@ -245,6 +246,7 @@ public static class TownOps
         foreach (var hex in ctx.EntitiesOfKind(F.KindHex))
         {
             if (!F.IsBlank(ctx.GetStr(hex.Id, F.HexOwner))) continue;      // 已属他城，不抢
+            if (!F.IsBlank(ctx.GetStr(hex.Id, F.HexWater))) continue;      // §3.1：水域不进辖地
             var (q, r) = MapGen.Coords(hex.Id);
             int d = MapGen.Distance(q - cq, r - cr);
             if (d < 1 || d > ClaimRadius) continue;

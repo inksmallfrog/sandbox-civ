@@ -232,7 +232,12 @@ public partial class Main : Node2D
         var hex = _sim.World.Get(new EntityId(hexId));
         if (hex is null) { _hint.Text = ""; return; }
         string land = _sim.Data.TryGet(hex.GetStr("hex.landform"), out var lf) ? lf.GetStr("title") : "?";
-        _hint.Text = $"{hexId} {land} · 高 {hex.GetInt("hex.height", 0)} · 温 {hex.GetInt("hex.temp", 0)} · 水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text}";
+        string waterId = hex.GetStr("hex.water");
+        string water = waterId.Length > 0 && _sim.Data.TryGet(waterId, out var wb) ? $"（{wb.GetStr("title")}）" : "";
+        string river = hex.GetStr("hex.river.down").Length > 0
+            ? $" · 河 {hex.GetInt("hex.river.flow", 0)} 格集水 / 宽 {hex.GetInt("hex.river.width", 0)} 档"
+            : "";
+        _hint.Text = $"{hexId} {land}{water} · 高 {hex.GetInt("hex.height", 0)} · 温 {hex.GetInt("hex.temp", 0)} · 降水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text}{river}";
     }
 
     /// <summary>辖地格属于哪座城（只读字段，不判规则）。</summary>
@@ -354,6 +359,12 @@ public partial class Main : Node2D
             Add($"[b]— {_selectedHex} —[/b]");
             string land = _sim.Data.TryGet(hex.GetStr("hex.landform"), out var lf) ? lf.GetStr("title") : "?";
             Add($"  地表：{land}（可建城 {(hex.Get("hex.buildable").AsBool() ? "是" : "否")}）");
+            string waterId = hex.GetStr("hex.water");
+            if (waterId.Length > 0 && _sim.Data.TryGet(waterId, out var wb))
+                Add($"  水体：{wb.GetStr("title")}（§3.1；水域不可建城）");
+            string down = hex.GetStr("hex.river.down");
+            if (down.Length > 0)
+                Add($"  河流：→ {down}（集水 {hex.GetInt("hex.river.flow", 0)} 格，宽 {hex.GetInt("hex.river.width", 1)} 档）");
             Add($"  高度 {hex.GetInt("hex.height", 0)} · 温度 {hex.GetInt("hex.temp", 0)} · 降水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text} · 行军 {hex.GetInt("hex.moveCost", 0)} · 防御 {hex.GetInt("hex.defense", 0)}");
             int farm = (int)hex.GetInt("hex.building.farm", 0);
             if (farm > 0) Add($"  农田 {farm} 级");

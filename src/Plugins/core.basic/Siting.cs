@@ -42,7 +42,7 @@ public static class Siting
 
         foreach (var hex in ctx.EntitiesOfKind(F.KindHex))
         {
-            if (!ctx.Get(hex.Id, F.HexBuildable).AsBool()) continue;         // §3.2：山地不可建城
+            if (!ctx.Get(hex.Id, F.HexBuildable).AsBool()) continue;         // §3.2：山地不可建城；§3.1：水域也不可
             if (!F.IsBlank(ctx.GetStr(hex.Id, F.HexOwner))) continue;       // 已有主的格不做城址
             var (hq, hr) = MapGen.Coords(hex.Id);
             bool tooClose = false;
@@ -79,6 +79,7 @@ public static class Siting
             int d = MapGen.Distance(q - hq, r - hr);
             if (d > TownOps.ClaimRadius) continue;
             if (!F.IsBlank(ctx.GetStr(hex.Id, F.HexOwner))) continue;       // 别人的辖地不计入
+            if (!F.IsBlank(ctx.GetStr(hex.Id, F.HexWater))) continue;       // §3.1：湖海不划入辖地，也不计入产能上限
             sumRaw += ctx.GetFix(hex.Id, F.HexYieldFood, Fix.Zero).Raw;
         }
         return sumRaw;

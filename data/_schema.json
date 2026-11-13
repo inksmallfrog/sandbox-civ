@@ -29,6 +29,16 @@
         "note": "str"
       }
     },
+    "waterbody": {
+      "idPrefix": "water.",
+      "required": ["title", "potential.food", "color"],
+      "scalars": {
+        "title": "str",
+        "potential.food": "fix",
+        "color": "str",
+        "note": "str"
+      }
+    },
     "class": {
       "idPrefix": "class.",
       "required": ["title", "labor", "output.food", "consumes.food", "satisfaction.expects"],

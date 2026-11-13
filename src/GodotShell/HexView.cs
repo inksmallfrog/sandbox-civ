@@ -164,9 +164,31 @@ public partial class HexView : Node2D
 
             DrawColoredPolygon(poly, baseColor);
             DrawPolyline(poly, new Color(0f, 0f, 0f, 0.35f), 1f);
+        }
 
-            // §3.2：山地不可建城。画一个峰形而不是「▲」字符——壳层不解释规则，但也不该依赖字体能显示什么符号
-            if (!hex.Get("hex.buildable").AsBool())
+        // 第二遍：河段。§3.3 的边存在上游格上（hex.river.down），两端中心连一条线；
+        // 必须等所有多边形画完，否则后画的格子会把半条河盖掉。
+        foreach (var hex in world.OfKind("hex"))
+        {
+            string down = hex.GetStr("hex.river.down");
+            if (down.Length == 0) continue;
+            var to = world.Get(new EntityId(down));
+            if (to is null) continue;
+            var (q, r) = AxialOf(hex);
+            var (tq, tr) = AxialOf(to);
+            int width = (int)hex.GetInt("hex.river.width", 1);
+            DrawLine(Pixel(q, r), Pixel(tq, tr), new Color(0.20f, 0.55f, 0.85f, 0.92f), 1.5f + width * 1.8f);
+        }
+
+        // 第三遍：不可建城标记、农田、城、悬停/选中描边。
+        foreach (var hex in world.OfKind("hex"))
+        {
+            var (q, r) = AxialOf(hex);
+            var center = Pixel(q, r);
+            var poly = Corners(center);
+
+            // §3.2：山地不可建城。水域同样不可建城（§3.8），但水格上不必再画峰形。
+            if (!hex.Get("hex.buildable").AsBool() && hex.GetStr("hex.water").Length == 0)
                 DrawColoredPolygon(
                     [center + new Vector2(0, -11), center + new Vector2(10, 8), center + new Vector2(-10, 8)],
                     new Color(0.16f, 0.16f, 0.19f, 0.80f));
@@ -257,6 +279,11 @@ public partial class HexView : Node2D
 
     private Color ColorOf(Entity hex)
     {
+        // §3.1 水体层优先于地表：湖/海的颜色来自 water.* 数据，改配色不用改代码。
+        string waterId = hex.GetStr("hex.water");
+        if (_sim is not null && waterId.Length > 0 && _sim.Data.TryGet(waterId, out var wb))
+            return HtmlColor(wb.GetStr("color"), new Color(0.20f, 0.40f, 0.60f));
+
         string defId = hex.GetStr("hex.landform");
         if (_sim is not null && _sim.Data.TryGet(defId, out var lf))
         {

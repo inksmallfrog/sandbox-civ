@@ -290,6 +290,42 @@
 - 影响：`BALANCE.md` §4 的 200 年轨迹整表重跑；`DATA_SCHEMA.md` 的实况段与 `docs/` 基线同步更新。
   `Siting.BestTownSite` 与命令面未动，`scripts/*.txt` 无需改。跨 OS 对账仍待 CI。
 
+### D-035 河网与水体：§3.3 有向边 + §3.1 水体层 + 水利系数（M2 切片三）
+
+- 日期：2026-11-13 / 类型：数据 + 数值 + 规则 / 状态：已实现，已重跑全部回归
+- 改了什么：
+  - 新增 `data/core.basic/water.json`（`waterbody` 2 条，`dataHash` 因此变化）：`water.lake`（湖，粮 2）、
+    `water.sea`（近海，粮 1），数值照抄 GDD §3.2 水域行；`data/_schema.json` 增加 `waterbody` 类型。
+  - 新增叠加层 `hex.water`：水体格仍然保留九类 `hex.landform`（§3.1 五层模型），
+    但 Y 由水体数据覆盖，`hex.buildable=false`，不进辖地、不计入选址评分。
+  - 新增 §3.3 有向边：每段河写在上游格上——`hex.river.down`（下游 hex id）、`hex.river.flow`（集水格数）、
+    `hex.river.width`（1–4 档）。生成用整数优先淹没法：从外圈海格出发按淹没水位扩张，
+    parent 链必然入海，不会成环、不会有无出口的内陆湖。
+  - §3.6 水利系数：河/湖相邻的陆格 `Y_g = 地表潜力 × 1.15`；水体格自己的 Y 取 `water.*`，不叠这个系数。
+    河段阈值 `RiverMinFlow=12`、湖泊阈值 `LakeMinFlow=2`（见代码注释与 `AI_HANDOFF.md` 坑 20）。
+  - `CoreInfo.MapGenVersion` 从 4 升至 5。CLI ASCII 用 `~` 画水域、`+` 画河段；Godot 按 `water.*` 配色、
+    沿 `hex.river.down` 画河线，悬停/侧栏显示水体与集水数。
+- 为什么：§3.7 第 3 步要求河流与湖泊；§3.3 的「河 = 地块边上的有向图」是 §3.4 河口/三角洲/峡谷/上游高地的前置；
+  §3.6 的水利系数 1.15 需要河/湖先存在。深海的航海门槛归 M7，筑坝/水运/渡口归 M5/M7。
+- 存档：没有新增结构版本——`hex.water` / `hex.river.*` 都是普通字段，旧档读回按缺省空串/0 处理，不需要迁移器；
+  `meta.mapGenVersion=5` 写进存档头部。新开局的地图整体重排，旧种子哈希按 §3.7 末行作废。
+- 模拟差异（`dataHash` 从 `eebed2c6f0ba30d1` 变为 `854a0facb520c4ee`）：
+
+  | 场景 | MapGenVersion=4（切片二） | MapGenVersion=5（切片三） |
+  |---|---|---|
+  | seed 7 / 6 回合 | `5e8fb72f798550d4` | `707c154e0930be52`（宿主 #1 CLI 与 Godot 4.7.2 smoke 同值，`SMOKE PASS`） |
+  | seed 99 / 50 回合 | `48ca402a8e5a4ae5` | `d8e2fb8206d7544f` |
+  | seed 5 / 第 12 回合快照 | `1ee5dcff0dd4127b` | `1403936053e8ccf5` |
+  | seed 5 / 20 回合续跑 | `b189d5e21b3eafab` | `18546b1d4f2d1866`（续跑与直跑相同） |
+  | seed 42 / 200 回合 | `820efa76ba0f98b6`（2 城 / 人口 163；产出上限 82.75 石） | `fae9549e734a3908`（2 城 / 人口 164；产出上限 83.20 石） |
+
+- 确定性证据：70 条测试全绿（新增 `河流每条有向边都连相邻格且最终入海或湖`、`水体按数据取粮潜力且不可建城`、
+  `河湖相邻的陆地格享受水利系数`、`同种子同河网换种子换河网`、`自动选址与辖地都不会落在水域`）；
+  `sim map --seed 7` 建图约 55 ms（判据 < 1000 ms）；河网、水体与 Y 全部整数定点，无浮点中间量。
+- 影响：`BALANCE.md` §4 的 200 年轨迹整表重跑（+1 百人单位、产出上限 +0.45 石，全部来自 1.15）；
+  `DATA_SCHEMA.md` / `SAVE_FORMAT.md` / `ROADMAP.md` / `TEST_PLAN.md` / `DEV_ENVIRONMENTS.md` 的实况段同步更新。
+  `Siting.BestTownSite` 只增加「跳过水域」一行，命令面与 `scripts/*.txt` 未动。跨 OS 对账仍待 CI。
+
 ---
 
 ## 5. 逻辑量盘点（§12 推进规则第 2 条：只增不减视为失控信号）
