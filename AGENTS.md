@@ -22,7 +22,7 @@
 **M1 Core 已完成并当场复验；M2 的地图骨架（32×20）与九类地表/气候分类已完成；M0 的 CI 工作流已补，只差首次远端双系统全绿。** 详见 [`docs/ROADMAP.md`](docs/ROADMAP.md) §1/§2。
 
 - 能跑的东西：无头模拟器 `sim`（6 个动词）、Godot 窗口壳（32×20 地图 + 点格建城 + headless 冒烟）。
-- 还不能跑的东西：价格（公式二）、八阶级（只有农民）、AP、名人、军事、外交、事件、联机传输。
+- 还不能跑的东西：八阶级（只有农民）、AP、名人、军事、外交、事件、联机传输；价格已接（公式二，M3）但不影响消费分配（等 M5 多镇贸易）。
 - 演示版本：`dotnet run --project src/HexaCiv.Cli -- run --seed 7 --turns 12 --steps --explain`。
 
 ## 3. 引擎与语言版本
@@ -44,7 +44,7 @@ AGENTS.md              本文件
 Directory.Build.props  net8.0 / C#12 / Nullable / 警告即错误 / RepoRoot
 HexaCiv.sln            SimCore + core.basic + sim + tests（GodotShell 刻意不在里面）
 .github/workflows/ci.yml 三 job × ubuntu + windows；godot-smoke 强制核对 SMOKE PASS 与哈希
-docs/                  GDD.md（唯一规则来源）+ §11.1 要求的文档 + REQUIREMENTS.md + DEV_ENVIRONMENTS.md
+docs/                  GDD.md（唯一规则来源）+ §11.1 要求的文档 + REQUIREMENTS.md + DEV_ENVIRONMENTS.md + UI_DESIGN.md
 src/SimCore/           内核：20 个 .cs，引擎无关，一条玩法规则都没有
 src/Plugins/core.basic/ 参考规则包：7 个 .cs + manifest.json（M1 的全部规则都在这一层）
 src/HexaCiv.Cli/       无头壳层（sim：Program / Runner / Script / AsciiMap）
@@ -112,9 +112,9 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 
 | 命令 | 期望 |
 |---|---|
-| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `5e8fb72f798550d4`，**且必须与 Godot 冒烟同值** |
+| `… hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | 末态 `9fe62d078937e3ef`，**且必须与 Godot 冒烟同值** |
 | `… replay --seed 5 --turns 20 --at 12` | 快照往返 `1ee5dcff0dd4127b`；续跑 = 一口气跑满 `b189d5e21b3eafab` |
-| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 163 / hash `820efa76ba0f98b6` |
+| `… run --seed 42 --turns 200 --headless --out analysis/out/demo.csv` | 末行：2 城 / 人口 163 / hash `e7e69b15db632966` |
 | `… check` | `dataHash eebed2c6f0ba30d1`，15 步、21 落点（**7 个不落在任何步骤**） |
 
 `dotnet test` 不覆盖跨宿主一致性：改过 `src/GodotShell/Main.cs` 的 `Smoke()` 参数，
@@ -150,7 +150,7 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 | 层 | 内容 | 证据 |
 |---|---|---|
 | SimCore | 九项职责全部实现（世界存储 / 15 步调度 / 分层 RNG / 数据注册 / 不变量 / 因果链 / 命令流 / 存档回放迁移 / 插件宿主）+ 同步层与分块哈希铺好接缝 | `AI_HANDOFF.md` §2.1、`ROADMAP.md` §2.2 |
-| core.basic | 32×20 矩形六边形图（§3.7 前四步：高度/温度/降水/九类地表）+ 建国 → 建城 → 开荒/起仓 → 产粮（公式一）→ 消耗 → 配给 → 满意度（公式三）→ 人口 → 不安计数 → 年报；**2/3 条公式** | `BALANCE.md` §1/§3/§4 |
+| core.basic | 32×20 矩形六边形图（§3.7 前四步：高度/温度/降水/九类地表）+ 建国 → 建城 → 开荒/起仓 → 产粮（公式一）→ 粮价（公式二）→ 消耗 → 配给 → 满意度（公式三）→ 人口 → 不安计数 → 年报；**三条公式已实现**；守恒等式（§5.9 第一条）与价格区间（§5.9 第四条）不变量已注册 | `BALANCE.md` §1/§3/§5 |
 | 壳层 | CLI 6 动词 + 选项集；Godot 窗口（绘制 / 拾取 / 侧栏 / 年报 / 640 格全格拾取自检） | `ROADMAP.md` §2 |
 | 测试 | 65 条：定点 12 / RNG 10 / 顺序与数据 10 / 循环 19 / 验收 14 | `TEST_PLAN.md` §2 |
 | 文档 | §11.1 要求的 13 份全部落地（GDD 之外 12 份 + REQUIREMENTS）+ 本文件 | `ROADMAP.md` §2.1 |
@@ -161,15 +161,18 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
    首跑全绿前 M0 仍标 🟡，不能打 `v0.0`。命令与判据见 `TEST_PLAN.md` §6。
 2. **两条接缝是「解析了但没人用」**：`SimConfig.YearLimit`（120/200 年不会自动结束）、
    `manifest.data_packs`（卡包开关还不生效）。**别误判成已生效**——前者归 M9，后者归 M8。
-3. **守恒等式没实现**（§5.9 前三条）：M1 没有进口/出口，现在只有范围与符号不变量兜着。归 M3。
-4. **建图计时已经有了**：`sim map` 会打印插件的建图耗时（32×20 实测约 35 ms，判据 < 1 s）。
+3. **守恒等式**（§5.9 前三条）：**第一条已实现**（物资守恒 `basic.conservation`，第 10 步末校验）；
+   银守恒（进出口/税）与人口守恒（迁移/阶级转化）归 M4–M5。
+4. **价格求解器目前只跑粮**（good.food），其余商品保持 basePrice（M4 接）；
+   `κ`（金本位调整）在 M3 固定为 1.0，等 M_global/M_ref 接了才生效。
+5. **建图计时已经有了**：`sim map` 会打印插件的建图耗时（32×20 实测约 35 ms，判据 < 1 s）。
    剩余地图工作（河流 / 形胜 / 资源 / 图层 4–5）归 M2 后续切片。
-5. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
+6. **`analysis/out/*.csv` 与 `saves/*.bin` 是旧产物**（gitignore）。A/B 前必须重新生成——
    本仓库已经有一次结论被旧 CSV 带偏。
-6. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
-7. **分支仍叫 `master`，CI 尚待远端首验**：当前已有 `origin` remote，但双系统工作流实际全绿前，任何「CI 绿」的主张都没有证据基础。
-8. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 用整数定点与整数平方根，地图形状为 32×20 矩形，
-   `CoreInfo.MapGenVersion=4`；宿主 #1 上 CLI 与 Godot 4.7.2 smoke 同为 `5e8fb72f798550d4`，
+7. **D-001 未裁决**：`v0.2` 以上的 tag 语义两套。在此之前只打 `v0.0` / `v0.1`。
+8. **分支仍叫 `master`，CI 尚待远端首验**：当前已有 `origin` remote，但双系统工作流实际全绿前，任何「CI 绿」的主张都没有证据基础。
+9. **地图生成的跨 OS 结果仍待 CI 验证**：`MapGen.cs` 用整数定点与整数平方根，地图形状为 32×20 矩形，
+   `CoreInfo.MapGenVersion=4`；宿主 #1 上 CLI 与 Godot 4.7.2 smoke 同为 `9fe62d078937e3ef`（M3 更新），
    CI 首验要在 ubuntu + windows 上复核同种子地图哈希。
 
 ## 11. 下一项任务（按顺序，不跳队）
@@ -178,9 +181,10 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
    把首个 Linux 哈希写回 `BALANCE.md` / `CHANGELOG-DESIGN.md`；本地等价复验不能替代这一步。
 2. **重写根 [`Readme.md`](Readme.md)**：人类入口，一条命令 + 一张截图 + 指回本文件（需求原文已在 `REQUIREMENTS.md`）。
 3. **打 tag `v0.0` / `v0.1`，并把 `master` → `main`**（D-002 的三步；`develop` / `feature/*` 有理由地推迟）。
-4. **继续 M2 地图**：形状（32×20）、建图计时、九类地表与温度/降水已在切片一/二完成；
-   剩余河流（§3.3）、12 种形胜（§3.4）、门槛资源（§3.5）、图层 4–5（§3.9）在
-   [`docs/ROADMAP.md`](docs/ROADMAP.md) §3。**M1 验收不过不许开 M2**（§12 推进规则）。
+4. **M2 剩余切片**：河流（§3.3）、12 种形胜（§3.4）、门槛资源（§3.5）、图层 4–5（§3.9）。
+   里程碑允许按技术依赖拆（用户已批准），M3 先行完成，M2 剩余不阻塞 M4。
+5. **M4 八阶级**：扩公式一到工业生产（料/器/奢）、价格跑在 5 种商品上、税制、阶级模板、
+   阶级状态机（怠工/罢工/暴动罚则）、人口阶级转化、AP 容量。三条公式全接完。
 
 ## 12. 不可违反的架构原则
 

@@ -173,6 +173,60 @@
   **不影响存档、不影响哈希**（清单不进状态）。
 - 测试：`OrderAndDataTests.清单键名拼错就拒载而不是静默落回默认值` + `仓库里真的装着core_basic` 的三条新断言。
 
+### D-035 公式二（粮价求解器）+ 守恒等式不变量（M3 单镇经济）
+
+- 日期：2026-11-13 / 类型：**规则 + 结构** / 状态：已实现，已附 4 条回归测试
+- 改了什么：
+  1. 新增 `Pricing.cs`：第 6 步 Summer、OnPriceForm hook、market_local 层、每城跑一次。
+     `p_{t+1} = clamp( p_t × (1 + 0.30 × (D − S) / max(S, 0.5) + shock) , 0.2×p0, 5×p0 )`
+     只对粮（good.food）跑价格，其余商品暂保持 basePrice（M4 八阶级接入后循环扩展）。
+  2. F.cs 新增 6 组字段路径方法：`town.price/demand/supply/consumed/spoiled/spilled.*`。
+  3. `SeasonRules.Consume` 补写 `consumed/spoiled/spilled` 三个字段（守恒校验的数据源）。
+  4. `TownOps.Found` 建城时初始化粮价 = good.food.basePrice = 4.00。
+  5. 新增两个不变量：`basic.price_bounds`（第 6 步末，价格区间兜底）+ `basic.conservation`
+     （第 10 步末，`supply = stockAfter + consumed + spoiled + spilled`，允许误差 0.02）。
+- 为什么：GDD §5.3 / §5.9。M1 只实现了公式一（生产）、公式三（满意度），价格公式二、
+  物资守恒四条等式全是缺口。M3 要求"守恒通过 + 灾年价格轨迹符合预期"才能验收。
+- 定点纪律：gap = (D−S)/max(S, 0.5) 可能在 S 很小（0.5 档）时产生大绝对值，
+  但我们先算完整括号里的 change = 1 + 0.30×gap + shock，再乘 p_prev，最后 clamp——
+  中间量不会被 ×100 定点截断两次。shock = N(0, 0.04) 用 `Fix.FromPercent(4)`，
+  乘 p_prev 时大数字在前。
+- 时序：D（需求）在第 6 步是预计值 `need × pop`，不是第 10 步的实际消费。
+  这符合 GDD §5.4 的「市场先出清、后消费」语义。价格求解器**不修改库存**，
+  只改价格字段和 demand/supply 快照——实际库存变动全在第 10 步 Consume。
+- 模拟差异（同种子 seed 42 / 200 年，2026-11-13 实跑）：
+
+  | 指标 | M1 末态 | M3 末态 | 差异 |
+  |---|---|---|---|
+  | 城数 | 2 | 2 | — |
+  | 人口 | 163 | 163 | — |
+  | 粮产出 | 82.75 | 82.75 | — |
+  | 最低满意 | 26.58 | 26.58 | — |
+  | 不安城数 | 2 | 2 | — |
+  | **200 年哈希** | `820efa76ba0f98b6` | `e7e69b15db632966` | 🔄 变了 |
+  | **6 回合跨宿主哈希** | `5e8fb72f798550d4` | `9fe62d078937e3ef` | 🔄 变了 |
+
+  **末态数值完全一致，但哈希变了**——因为世界状态里多了 price/demand/supply/consumed/spoiled/spilled 等字段。
+  价格是"随供需变化的数字"，还没接入消费分配逻辑（那是 M5 多镇贸易的事），
+  所以人口、产出、满意度、不安的轨迹和 M1 相同。
+
+- 影响：
+  - **确定性**：两遍逐回合哈希全同（`sim hash` 通过）。RNG 流命名 `price.good.food.T{turn}`，三要素齐全。
+  - **存档兼容**：新存档带 price 字段，旧存档读进来 price 为 Fix.Zero，
+    Pricing.Price 里 fallback 用 good.food.basePrice（4.00）兜底，不会崩。
+    这是新增字段不改旧档的安全模式，不需要迁移器。
+  - **SimCore 零改动**：hook 点和 RNG 已就位，不需要开新接口。
+  - **数据文件零改动**：good.json 的 basePrice 4.00 已是 GDD §5.1 的值，不需要调。
+- 回归测试（4 条新增，全部在 `CoreBasicTests`）：
+  - `粮价初始化且五回合内保持在区间内` —— 建城时 price = 4.00，5 回合后仍在 [0.80, 20.00]
+  - `多种子二十回合粮价始终在区间内` —— seed 201–210，全部 clamp 生效
+  - `三十回合守恒不变量不触发` —— 能跑完 = supply = stockAfter + consumed + spoiled + spilled
+  - `灾年粮价涨丰年粮价跌` —— 辖地潜力清零后，价格从正常年的 3.12 涨到 7.30+
+- 踩坑记录（写入本仓库 `docs/AI_HANDOFF.md` §5）：
+  - FanOut stepId 写成 `"local"` 会导致 hook 不触发，正确 stepId 是 `"market_local"`
+    （`Time.cs` 的 stepIds 表：layer 名 ≠ stepId 名）
+  - 产出已被 Produce 写进 stock（AddFix），Pricing 里再 `stock + output` 会翻倍 supply → 守恒恒等于 supply - 2×supply ≠ 0
+
 ---
 
 ## 4. 引用修正（不改行为，但指错章节会让下一个人按错的规则改代码）
