@@ -12,9 +12,8 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_NOLOGO: 1
   GODOT_VERSION: 4.7.2
-  # 平台范围：**只跑 Windows**（用户 2026-11-13 决定暂不考虑 Linux 兼容性，M0 的
-  # ubuntu 首验先不做）。要恢复双系统时把 [windows-latest] 改回
-  # [ubuntu-latest, windows-latest] 即可，job 本体已按 $IsWindows 分支写好。
+  # 平台范围：**Windows + Linux 双系统**。设计者 2026-11-13 先要求 Windows-only，
+  # 随后又要求把 Linux 验证加回来：跨 OS 同种子同哈希是 §10.7 的硬主张，必须两边都在跑。
   EXPECTED_SMOKE_HASH: fc88ca36ce90fb37
 
 jobs:
@@ -23,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +68,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -109,8 +108,17 @@ jobs:
           if (-not $IsWindows) { chmod +x $binary.FullName }
 
           $stdout = Join-Path $env:RUNNER_TEMP "godot-version.log"
-          $proc = Start-Process -FilePath $binary.FullName -ArgumentList "--version" `
-            -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout
+          # -NoNewWindow 只在 Windows 有意义；Linux 上用同一份 splat 去掉它，
+          # 否则 pwsh 在 ubuntu 上会报参数不支持。
+          $start = @{
+            FilePath               = $binary.FullName
+            ArgumentList           = "--version"
+            Wait                   = $true
+            PassThru               = $true
+            RedirectStandardOutput = $stdout
+          }
+          if ($IsWindows) { $start.NoNewWindow = $true }
+          $proc = Start-Process @start
           $ver = if (Test-Path $stdout) { (Get-Content $stdout -Raw).Trim() } else { "" }
           Write-Host "Godot 版本输出：'$ver'（退出码 $($proc.ExitCode)）"
           if ($proc.ExitCode -ne 0) { throw "Godot 无法启动，退出码 $($proc.ExitCode)" }

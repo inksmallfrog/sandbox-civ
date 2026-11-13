@@ -1,14 +1,15 @@
-name: ci-windows
+name: ci
 
 # GitCode（AtomGit）只识别 .gitcode/workflows/*.yml；.github/workflows/ci.yml 保留给
 # GitHub 兼容镜像，两边的命令与哈希判据必须一致（改一个就要改另一个）。
-# 平台范围：只跑 Windows（设计者 2026-11-13 决定暂不验 Linux）。
-# 触发说明：文件本身必须在默认分支上，push 事件才会被识别；新增工作流的那一次 push
-# 不一定触发，所以这里留一次显式的空提交（见 D-043），之后每次 push 都会跑。
+# 平台范围：Windows + Linux 双系统（跨 OS 同种子同哈希是 §10.7 的硬主张）。
+# 触发说明：文件本身必须在默认分支上，push 事件才会被识别；分支改名期间
+# main 与 master 都列在触发列表里，改名完成后可以删掉 master。
 
 on:
   push:
     branches:
+      - main
       - master
   pull_request:
   workflow_dispatch:
@@ -19,8 +20,12 @@ env:
 
 jobs:
   build-test:
-    name: 构建与单测（Windows）
-    runs-on: [windows-latest, x64, small]
+    name: 构建与单测（${{ matrix.os }}）
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: [${{ matrix.os }}, x64, small]
     timeout-minutes: 40
     steps:
       - name: 拉取代码
@@ -35,8 +40,12 @@ jobs:
         run: dotnet test --no-build --nologo
 
   sim-headless:
-    name: 无头模拟（Windows）
-    runs-on: [windows-latest, x64, small]
+    name: 无头模拟（${{ matrix.os }}）
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: [${{ matrix.os }}, x64, small]
     timeout-minutes: 40
     steps:
       - name: 拉取代码
