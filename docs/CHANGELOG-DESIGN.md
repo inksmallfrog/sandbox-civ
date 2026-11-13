@@ -326,6 +326,65 @@
   `DATA_SCHEMA.md` / `SAVE_FORMAT.md` / `ROADMAP.md` / `TEST_PLAN.md` / `DEV_ENVIRONMENTS.md` 的实况段同步更新。
   `Siting.BestTownSite` 只增加「跳过水域」一行，命令面与 `scripts/*.txt` 未动。跨 OS 对账仍待 CI。
 
+### D-036 十二形胜 + 五种门槛资源 + 图层 4–5（M2 切片四）
+
+- 日期：2026-11-13 / 类型：数据 + 数值 + 规则 / 状态：**已实现，已重跑全部回归**
+- 改了什么：
+  - 新增 `data/core.basic/shape.json`（`shape` 12 条，§3.4 全部行）与 `data/core.basic/resource.json`
+    （`resource` 5 条，§3.5 全部行）；`data/_schema.json` 增加 `shape` / `resource` 两种类型。
+  - 新增 `hex.shape` 与 `hex.resource` 两个标签字段：形胜/资源是 §3.1 五层地块模型的第三、四层，
+    叠加在地表上，不改 `hex.landform`，也不进 `town.stock.*` 的 5 类库存。
+  - 新增 `hex.yield.mat`（料潜力）。§3.6 的 `Y_g` 对粮/料两行都成立，M1 只落了粮；山谷/火山的
+    `yield.mat` 没有这个字段就无处可写。
+  - §3.6 乘法链落到 `hex.yield.food/mat`：`(地表潜力 + 形胜地力) × 形胜倍率 × 资源倍率 × 水利系数`。
+    `moveCost` / `defense` 也乘形胜修正（隘口 4×0.25=1 行军、2×2.5=5 防御）。`hex.water` 格仍走水体底值；
+    渔汛按 §3.5 原文「湖海粮潜力 +1」做加法。
+  - 新增 `src/Plugins/core.basic/Features.cs`：§3.4 十二种形胜的识别规则；§3.5 五种资源的地形资格 +
+    每格确定性哈希生成，并对「整图缺一种」做一次确定性兜底（§3.7 公平性检查的一条）。
+  - 新增 `src/Plugins/core.basic/Sculpt.cs`：§3.7 第 6 步「出生点公平性修正」的生成侧——
+    主动雕刻一处盆地（距中心 2 格抬成丘陵环、留 1 个排水口）、一条山谷（6–10 格槽 + 两侧丘陵）、
+    一段峡谷（高流量河两岸抬高、河床压低）。纯噪声在 32×20 上经常长不出这三种骨架，
+    不雕刻就只能把识别阈值放松到「到处都是形胜」，那会毁掉 §3.4 的战略含义。
+  - `CoreInfo.MapGenVersion` 从 5 升至 6。CLI `sim map` 新增主图 `--layer`
+    （`terrain` / `owner` / `agriculture` / `resource` / `population`），并固定输出形胜分布、资源分布两张小图；
+    Godot 增加「图层 T」按钮、左上角形胜圆点、资源图层标记，悬停/侧栏显示形胜、资源、料潜力。
+  - `core.basic` 图层声明从 3 层补到 5 层：新增 `resource`（资源）与 `population`（人口密度）。
+- 为什么：§12 M2 的交付是「六边形渲染、五层数据、生成器（盆地/山谷/河网/隘口）、拾取」，
+  验收是「同形胜在 20 张图里人工可认出」；§3.4/§3.5/§3.9 是这三项的直接来源。
+  军事实算（隘口 +3、关城）、筑坝/断水、资源门槛（铁/马/盐/香料）分别归 M7/M5/M3，
+  本轮只把标签、倍率与查询落下来。
+- 与 GDD 字面的三处解释（**待设计者确认，不阻塞 M2**）：
+  1. §3.4 绿洲「粮潜力 ×1.5」而 §3.2 荒漠粮潜力为 0，纯乘法恒为 0。实现给 `shape.oasis`
+     加 `bonus.food = 1.00`（形胜自带地力），再乘 1.5，得到局部 1.5。
+  2. §3.4 只给了盆地 1.3 / 山谷料 1.2 / 三角洲 1.5 / 绿洲 1.5 / 火山料 1.5 的字面倍率；
+     河口 1.2、山谷 0.75 行军、隘口 2.5 防御等其余取值是本切片的占位标定，全部住在 `shape.json`，
+     改数值不需要动代码。
+  3. 隘口仍按 §3.8「山地不是城址」保持 `hex.buildable=false`；它是 M7 的关城位，不是 M2 的城址。
+     若设计者要「山口可建关城」，那是 M7 的额外规则，不在本轮偷偷放开。
+  4. §3.4 写盆地是 8–20 格低地；32×20 的雕刻盆底本身是 7 格（中心 + 六邻，另有 1 格排水口），
+     再被湖/谷切掉一两格时会出现 4–6 格的小盆地。实现把下限放到 4，20 个种子的多数是 7–9 格；
+     若设计者要求严格 8 格起，改 `Features.BasinMinTiles` 即可，但会让一部分图没有盆地。
+- 存档：没有新增结构版本——`hex.shape` / `hex.resource` / `hex.yield.mat` 都是普通字段，
+  旧档读回按空串/0 处理，不需要迁移器；`meta.mapGenVersion=6` 写进存档头部。
+  新开局的地图整体重排，旧种子哈希按 §3.7 末行作废。
+- 模拟差异（`dataHash` 从 `854a0facb520c4ee` 变为 `78bad421c6439b0d`）：
+
+  | 场景 | MapGenVersion=5（切片三） | MapGenVersion=6（切片四） |
+  |---|---|---|
+  | seed 7 / 6 回合 | `707c154e0930be52` | `dbd386ed1bd058de`（宿主 #1 CLI 与 Godot 4.7.2 smoke 同值，`SMOKE PASS`） |
+  | seed 99 / 50 回合 | `d8e2fb8206d7544f` | `d4a2a19b7ccd4845` |
+  | seed 5 / 第 12 回合快照 | `1403936053e8ccf5` | `96522e125fca1059` |
+  | seed 5 / 20 回合续跑 | `18546b1d4f2d1866` | `c887c475cd95fd1c`（续跑与直跑相同） |
+  | seed 42 / 200 回合 | `fae9549e734a3908`（2 城 / 人口 164；产出上限 83.20 石） | `1533e72d71f1e089`（2 城 / 人口 162；产出上限 82.05 石） |
+
+- 确定性证据：86 条测试全绿（新增 16 条：形胜/资源数据、§3.6 公式、盆地/隘口/河口/上游高地/峡谷/
+  湖岛/绿洲/盐湖/冲积扇/火山的结构判据、渔汛、20 图十二形胜、20 图五种资源、同种子同图、图层声明）；
+  `sim map --seed 7` 建图约 71 ms（判据 < 1000 ms）；识别与雕刻只用整数与整数哈希，无浮点中间量。
+- 影响：200 年轨迹重跑（人口 164→162、产出上限 83.20→82.05 石，来自地形重排与形胜倍率）；
+  `DATA_SCHEMA.md` / `SAVE_FORMAT.md` / `ROADMAP.md` / `TEST_PLAN.md` / `BALANCE.md` /
+  `AI_HANDOFF.md` / `AGENTS.md` / `DEV_ENVIRONMENTS.md` 的实况段同步更新。
+  20 张图的形胜清单在 `analysis/out/m2-shapes.txt`（gitignore 产物），人工目检判据仍是 §12 的那一条。
+
 ---
 
 ## 5. 逻辑量盘点（§12 推进规则第 2 条：只增不减视为失控信号）
@@ -338,21 +397,23 @@ find src/SimCore src/Plugins/core.basic src/HexaCiv.Cli src/GodotShell tests \
 dotnet run --project src/HexaCiv.Cli -- check | head -3
 ```
 
-| 量 | M0 + M1（2026-11-13） | 怎么数出来的 |
+| 量 | M2 结束（2026-11-13） | 怎么数出来的 |
 |---|---:|---|
 | SimCore 文件 / 行 | 20 / 3404 | `find src/SimCore -name '*.cs'`（不含 `obj/` 生成物） |
-| `core.basic` 文件 / 行 | 7 / 1027 | 同上 |
-| CLI 壳层 / Godot 壳层 行 | 646 / 642 | 壳层合计 1288 行，**里面一条规则都没有**（§10.2） |
-| 测试行 / 条数 | 1153 / 60 | `dotnet test --list-tests` |
-| 数据文件 / 记录 | 5 / 14 | `data/_schema.json` + `data/core.basic/*.json`（地表 5、物资 5、建筑 3、阶级 1） |
+| `core.basic` 文件 / 行 | 9 / 2020 | 同上 |
+| CLI 壳层 / Godot 壳层 行 | 751 / 801 | 壳层合计 1552 行，**里面一条规则都没有**（§10.2） |
+| 测试行 / 条数 | 1687 / 86 | `dotnet test --list-tests` |
+| 数据文件 / 记录 | 8 / 37 | `data/_schema.json` + `data/core.basic/*.json`（地表 9、水体 2、形胜 12、资源 5、物资 5、建筑 3、阶级 1） |
 | 结算步 | 15 | §2.3 写死，`sim check` 打印的表 |
 | hook 落点 | 21（其中 7 个不落在任何步骤） | `SimOrder.DescribeHookMap()` |
 | 已实装的规则处理器 | 11 处注册（4 个主题级 + 7 个全局/扇出） | `BasicPlugin.Register` |
 | 已实装的公式 | 2 / 3 | 公式一 ✅ 公式三 ✅ 人口 ✅；**公式二 ⛪** |
 | 命令 | 3 | `nation.found` / `town.found` / `building.build` |
 | 不变量 | 1（`basic.ranges`）+ Core 侧的 reason/顺序自检 | `BasicPlugin.cs:83` |
-| 图层声明 | 3 / 9 | `terrain` `owner` `agriculture`，§3.9 要 9 层 |
+| 图层声明 | 5 / 9 | `terrain` `owner` `agriculture` `resource` `population`；§3.9 的阶级/贸易/军事/信仰/文化随 M4/M5/M7/M8 进 |
 
-**判读**：M1 的规则条目集中在一个 1027 行的参考插件里，Core 侧没有增加任何玩法分支。
-下一次盘点在 M2 结束时做，重点看两个数：SimCore 行数（**不该因为加内容而涨**，
-涨了说明有人把规则塞进内核）与 `core.basic` 行数（涨是预期内的，但单文件超过 ~1200 行就该拆插件）。
+**判读**：M2 结束时 SimCore 仍是 20 文件 / 3404 行，**一行没涨**——形胜、资源、骨架雕刻全在
+`core.basic`（9 文件 / 2020 行），符合「Core 稳定、插件扩展」。单文件最长的仍是 `MapGen.cs`
+（约 500 行，未触发 ~1200 行的拆文件阈值）；新增的 `Features.cs` / `Sculpt.cs` 是把识别规则与
+生成骨架从 MapGen 里分出来的，因为两者职责不同：一个读拓扑出标签，一个改高度保证骨架。
+下一次盘点在 M3 结束时做，重点看 SimCore 行数与公式二落点。

@@ -31,12 +31,12 @@
 {
   "schemaVersion": 1,          // CoreInfo.SchemaVersion；比本程序新 → 拒绝打开
   "gameVersion": "0.1.0",      // 诊断用
-  "mapGenVersion": 5,          // GDD §3.7「生成器版本号写入存档」
+  "mapGenVersion": 6,          // GDD §3.7「生成器版本号写入存档」
   "worldSeed": "7",            // 注意：字符串（ulong 超过 JS 安全整数）
   "turn": 12,
   "yearBase": 1,
-  "dataHash": "854a0facb520c4ee",     // 数据包摘要：档与数据不同源时报警
-  "snapshotHash": "1403936053e8ccf5", // 写档时的 StateHash.Total
+  "dataHash": "78bad421c6439b0d",     // 数据包摘要：档与数据不同源时报警
+  "snapshotHash": "96522e125fca1059", // 写档时的 StateHash.Total
   "savedUtc": "…",                      // 🟡 M1 永远缺席：两个壳层都不填，Core 禁止读时钟
   "pluginVersions": { "core.basic": "0.1.0" },
   "kindCounters":  { "hex": 640, "town": 1, "nation": 1 },  // 缺了它重开后会撞 id
@@ -57,6 +57,10 @@
    `SortedDictionary(Ordinal)`。读侧不依赖文件里的顺序。
 3. **数组字段与嵌套对象**（数据包里的 `Root`）不进存档：存档只存世界状态，
    不存数据包本体——数据包由 `dataHash` 把关。
+
+> M2 切片四新增的 `hex.shape` / `hex.resource` / `hex.yield.mat` 都是普通标量字段，
+> 走同一套 `SimValue.Canonical`；旧档缺这三个字段时按空串 / 0 读回，不需要迁移器。
+> 地图本身由 `mapGenVersion=6` 标识，旧版生成器的档不保证能重放出同一张图。
 
 ---
 
@@ -132,9 +136,9 @@ public static class MigratorChain { Register(m); Registered; Clear();
 ## 6. 等价性自检（`sim replay`）
 
 ```
-第 12 回合快照往返　　：✓ 1403936053e8ccf5
-一口气跑满 20 回合　　：18546b1d4f2d1866
-存第 12 回合后续跑 8 回合：18546b1d4f2d1866
+第 12 回合快照往返　　：✓ 96522e125fca1059
+一口气跑满 20 回合　　：c887c475cd95fd1c
+存第 12 回合后续跑 8 回合：c887c475cd95fd1c
 ✓ 存档续跑等价（§10.6）
 ```
 

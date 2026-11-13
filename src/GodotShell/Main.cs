@@ -25,6 +25,7 @@ public partial class Main : Node2D
     private const string DefaultSave = "saves/godot-shell.bin";
 
     private ulong _seed = 7;
+    private int _layerIndex;
     private Simulation _sim = null!;
     private TurnReport? _last;
     private HexView _view = null!;
@@ -135,6 +136,8 @@ public partial class Main : Node2D
         _last = null;
         _selectedHex = "";
         _selectedTown = "";
+        _layerIndex = 0;
+        _view.Layer = _sim.Layers.Count > 0 ? _sim.Layers[0].Id : "terrain";
         _view.Bind(_sim);
         Refresh();
     }
@@ -205,6 +208,10 @@ public partial class Main : Node2D
         }
         GD.Print($"smoke 拾取：{total - bad}/{total} 命中" + (bad == 0 ? "" : $"（{bad} 处偏格）"));
 
+        int shapeTiles = _sim.World.OfKind("hex").Count(h => h.GetStr("hex.shape").Length > 0);
+        int resourceTiles = _sim.World.OfKind("hex").Count(h => h.GetStr("hex.resource").Length > 0);
+        GD.Print($"smoke 图层：{string.Join(",", _sim.Layers.Select(l => l.Id))} / " +
+                 $"形胜 {shapeTiles} 格 / 资源 {resourceTiles} 格（§3.4 / §3.5）");
         GD.Print($"smoke 终局：{nations} 国 / {towns} 城 / 地块 {_sim.World.OfKind("hex").Count}");
         bool ok = towns > 0 && nations > 0 && bad == 0;
         // 失败要落到 stderr：窗口模式下 stdout 可能被吞，CI 只看得到退出码与错误流
@@ -237,8 +244,14 @@ public partial class Main : Node2D
         string river = hex.GetStr("hex.river.down").Length > 0
             ? $" · 河 {hex.GetInt("hex.river.flow", 0)} 格集水 / 宽 {hex.GetInt("hex.river.width", 0)} 档"
             : "";
-        _hint.Text = $"{hexId} {land}{water} · 高 {hex.GetInt("hex.height", 0)} · 温 {hex.GetInt("hex.temp", 0)} · 降水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text}{river}";
+        string shape = DefTitle(hex.GetStr("hex.shape"), " · 形胜 ");
+        string resource = DefTitle(hex.GetStr("hex.resource"), " · 资源 ");
+        _hint.Text = $"{hexId} {land}{water}{shape}{resource} · 高 {hex.GetInt("hex.height", 0)} · 温 {hex.GetInt("hex.temp", 0)} · 降水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text}{river}";
     }
+
+    /// <summary>把字段里的数据 id 读成标题；空串返回空，壳层不猜规则。</summary>
+    private string DefTitle(string defId, string prefix) =>
+        defId.Length > 0 && _sim.Data.TryGet(defId, out var def) ? prefix + def.GetStr("title") : "";
 
     /// <summary>辖地格属于哪座城（只读字段，不判规则）。</summary>
     private string FindOwnerTown(string hexId) =>
@@ -254,6 +267,7 @@ public partial class Main : Node2D
             case Key.F: SubmitBuild("building.farm"); break;
             case Key.G: SubmitBuild("building.granary"); break;
             case Key.N: SubmitFoundNation(); break;
+            case Key.T: CycleLayer(); break;
             case Key.R: StartGame(_seed + 1, banner: true); break;
             case Key.S: DoSave(); break;
             case Key.L: DoLoad(); break;
@@ -263,6 +277,17 @@ public partial class Main : Node2D
     }
 
     // ---- 命令：只有提交，没有裁决 ----
+
+    /// <summary>§3.9 图层切换：只换壳层配色，世界状态一个字段都不改。</summary>
+    private void CycleLayer()
+    {
+        if (_sim is null || _sim.Layers.Count == 0) return;
+        _layerIndex = (_layerIndex + 1) % _sim.Layers.Count;
+        _view.Layer = _sim.Layers[_layerIndex].Id;
+        _lastRuling = $"图层：{_sim.Layers[_layerIndex].Title}（{_view.Layer}，§3.9 纯查询）";
+        _view.QueueRedraw();
+        Refresh();
+    }
 
     private void SubmitFoundNation()
     {
@@ -340,7 +365,10 @@ public partial class Main : Node2D
         var sb = new System.Text.StringBuilder();
         void Add(string line) => sb.AppendLine(line);
 
-        _clock.Text = $"{_sim.Time.Text}　·　seed {_seed}　·　哈希 {_sim.Hash().Total}";
+        string layerTitle = _sim.Layers.Count > 0
+            ? _sim.Layers[Math.Clamp(_layerIndex, 0, _sim.Layers.Count - 1)].Title
+            : "—";
+        _clock.Text = $"{_sim.Time.Text}　·　seed {_seed}　·　哈希 {_sim.Hash().Total}　·　图层 {layerTitle}";
 
         Add(_lastRuling);
         Add("");
@@ -365,7 +393,23 @@ public partial class Main : Node2D
             string down = hex.GetStr("hex.river.down");
             if (down.Length > 0)
                 Add($"  河流：→ {down}（集水 {hex.GetInt("hex.river.flow", 0)} 格，宽 {hex.GetInt("hex.river.width", 1)} 档）");
-            Add($"  高度 {hex.GetInt("hex.height", 0)} · 温度 {hex.GetInt("hex.temp", 0)} · 降水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text} · 行军 {hex.GetInt("hex.moveCost", 0)} · 防御 {hex.GetInt("hex.defense", 0)}");
+            string shapeId = hex.GetStr("hex.shape");
+            if (shapeId.Length > 0 && _sim.Data.TryGet(shapeId, out var shapeDef))
+            {
+                string shapeNote = shapeDef.GetStr("note");
+                Add(shapeNote.Length > 0
+                    ? $"  形胜：{shapeDef.GetStr("title")}（§3.4：{shapeNote}）"
+                    : $"  形胜：{shapeDef.GetStr("title")}（§3.4）");
+            }
+            string resourceId = hex.GetStr("hex.resource");
+            if (resourceId.Length > 0 && _sim.Data.TryGet(resourceId, out var resDef))
+            {
+                string resNote = resDef.GetStr("note");
+                Add(resNote.Length > 0
+                    ? $"  资源：{resDef.GetStr("title")}（§3.5：{resNote}）"
+                    : $"  资源：{resDef.GetStr("title")}（§3.5）");
+            }
+            Add($"  高度 {hex.GetInt("hex.height", 0)} · 温度 {hex.GetInt("hex.temp", 0)} · 降水 {hex.GetInt("hex.rain", 0)} · 粮潜力 {hex.GetFix("hex.yield.food", Fix.Zero).Text} · 料潜力 {hex.GetFix("hex.yield.mat", Fix.Zero).Text} · 行军 {hex.GetInt("hex.moveCost", 0)} · 防御 {hex.GetInt("hex.defense", 0)}");
             int farm = (int)hex.GetInt("hex.building.farm", 0);
             if (farm > 0) Add($"  农田 {farm} 级");
             Add("");
@@ -440,6 +484,7 @@ public partial class Main : Node2D
         AddButton("结束回合 Space", EndTurn);
         AddButton("存盘 S", DoSave);
         AddButton("读档 L", DoLoad);
+        AddButton("图层 T", CycleLayer);
         AddButton("换种子 R", () => StartGame(_seed + 1, banner: true));
         _hint = new Label { Text = "" };
         _hint.AddThemeColorOverride("font_color", new Color(0.72f, 0.78f, 0.86f));

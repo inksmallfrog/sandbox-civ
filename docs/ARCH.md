@@ -56,13 +56,13 @@ sandbox-civ/
   docs/                  GDD.md（唯一规则来源，AI 不得自行修改）+ §11.1 要求的另外 12 份 + REQUIREMENTS.md + history/ + screenshots/
   src/
     SimCore/             内核（20 个 .cs，见 §3）
-    Plugins/core.basic/  参考规则包（BasicPlugin/F/MapGen/Nations/SeasonRules/Siting/TownOps + manifest.json）
+    Plugins/core.basic/  参考规则包（BasicPlugin/F/MapGen/Features/Sculpt/Nations/SeasonRules/Siting/TownOps + manifest.json）
     HexaCiv.Cli/         sim 无头壳层（Program.cs 含 Options / Runner.cs / Script.cs / AsciiMap.cs）
     GodotShell/          窗口壳层（Main.cs / HexView.cs / Main.tscn / project.godot）
   data/
     _schema.json         每种数据包类型的字段与类型
-    core.basic/          building.json / class.json / good.json / landform.json
-  tests/SimCore.Tests/   xUnit，70 条（单测 + §12 里程碑验收）
+    core.basic/          building.json / class.json / good.json / landform.json / resource.json / shape.json / water.json
+  tests/SimCore.Tests/   xUnit，86 条（单测 + §12 里程碑验收）
   scripts/               demo.txt（命令脚本）、godot-smoke.txt（与窗口冒烟同流）
   analysis/out/          基线 CSV 报告（每个里程碑提交附一份）
   saves/                 回归样本档（.gitkeep，产物被 ignore）
@@ -119,7 +119,7 @@ sandbox-civ/
 
 | 接缝 | 现状 | 谁将来用它 |
 |---|---|---|
-| `IPluginApi.RegisterLayer` | `core.basic` 注册了 terrain / owner / agriculture 三个图层，Core 只存元数据 | M2 `map.view`（图层是纯查询，不改状态） |
+| `IPluginApi.RegisterLayer` | `core.basic` 注册了 terrain / owner / agriculture / resource / population 五个图层，Core 只存元数据 | M2 `map.view`（图层是纯查询，不改状态） |
 | `IStepContext.DispatchSubjects` | 扇出点由插件调用，Core 不认识 `town` | 每个新玩法插件（`econ.local` 扇 `town`、`town.classes` 扇 `class`） |
 | `HookArgs` 具名槽位 | 只有 `step/stepId/slot/layer/command/issuer/arg.*/result` 被 Core 使用 | 插件自定义参数从这里长出来 |
 | `ISaveMigrator` / `MigratorChain` | 注册表为空（`schemaVersion=1`） | 第一次破存档的结构改动必须补上迁移器 + 旧档回归 |

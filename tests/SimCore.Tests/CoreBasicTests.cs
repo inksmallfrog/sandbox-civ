@@ -181,7 +181,11 @@ public class CoreBasicTests
 
             var def = sim.Data.Get(waterId);
             Assert.Equal(F.TypeWaterbody, def.Type);
-            Assert.Equal(def.GetFix("potential.food"), hex.GetFix(F.HexYieldFood));
+            // §3.5 渔汛是「湖海粮潜力 +1」，所以水域格要在底值上加上资源加成。
+            Fix expected = def.GetFix("potential.food");
+            if (hex.GetStr(F.HexResource) == "resource.fish")
+                expected += sim.Data.Get("resource.fish").GetFix("bonus.food");
+            Assert.Equal(expected, hex.GetFix(F.HexYieldFood));
             Assert.False(hex.Get(F.HexBuildable).AsBool(), $"{hex.Id} 是 {def.GetStr("title")}，却被标成可建城");
             Assert.Equal("", hex.GetStr(F.HexRiverDown));
         }
@@ -227,8 +231,18 @@ public class CoreBasicTests
         foreach (var hex in hexes)
         {
             if (hex.GetStr(F.HexWater).Length > 0) continue;
-            Fix potential = sim.Data.Get(hex.GetStr(F.HexLandform)).GetFix("potential.food");
-            Fix expected = wet.Contains(hex.Id.Value) ? Fix.Mul(potential, Fix.FromPercent(115)) : potential;
+            var lf = sim.Data.Get(hex.GetStr(F.HexLandform));
+            Fix potential = lf.GetFix("potential.food");
+
+            // §3.6 第一行：Y_g = (地表潜力 + 形胜地力) × 形胜倍率 × 资源倍率 × 水利系数。
+            string shapeId = hex.GetStr(F.HexShape);
+            string resourceId = hex.GetStr(F.HexResource);
+            Fix bonus = shapeId.Length > 0 ? sim.Data.Get(shapeId).GetFix("bonus.food", Fix.Zero) : Fix.Zero;
+            Fix shapeMul = shapeId.Length > 0 ? sim.Data.Get(shapeId).GetFix("yield.food", Fix.One) : Fix.One;
+            Fix resMul = resourceId.Length > 0 ? sim.Data.Get(resourceId).GetFix("yield.food", Fix.One) : Fix.One;
+
+            Fix expected = Fix.Mul(Fix.Mul(potential + bonus, shapeMul), resMul);
+            if (wet.Contains(hex.Id.Value)) expected = Fix.Mul(expected, Fix.FromPercent(115));
             Assert.Equal(expected, hex.GetFix(F.HexYieldFood));
         }
     }

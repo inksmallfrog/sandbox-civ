@@ -22,6 +22,8 @@ public static class F
     // ---- 数据包类型（type 字段，见 data/_schema.json）----
     public const string TypeLandform = "landform";
     public const string TypeWaterbody = "waterbody";
+    public const string TypeShape = "shape";
+    public const string TypeResource = "resource";
     public const string TypeClass = "class";
     public const string TypeGood = "good";
     public const string TypeBuilding = "building";
@@ -41,10 +43,13 @@ public static class F
     public const string HexDefense = "hex.defense";        // int: §3.6 地表防御
     public const string HexBuildable = "hex.buildable";    // bool: 可否建城（§3.2；水域恒为 false）
     public const string HexWater = "hex.water";            // str: waterbody.*（湖/近海），空 = 陆地（§3.1 水体层）
+    public const string HexShape = "hex.shape";            // str: shape.*（§3.4 形胜层），空 = 无形胜
+    public const string HexResource = "hex.resource";      // str: resource.*（§3.5 门槛资源），空 = 无资源
     public const string HexRiverDown = "hex.river.down";   // str: 下游地块 id，空 = 无河段（§3.3 有向边 from→to）
     public const string HexRiverFlow = "hex.river.flow";   // int: 本格集水数（含自身），§3.3 的 flow
     public const string HexRiverWidth = "hex.river.width"; // int 1–4：河宽档，渲染与后续河运/渡口读它
     public const string HexYieldFood = "hex.yield.food";   // fix: Y_g 粮潜力（§3.6 第一行）
+    public const string HexYieldMat = "hex.yield.mat";     // fix: Y_g 料潜力（§3.6 第一行的另一个 g）
     public const string HexOwner = "hex.owner";            // str: 辖于哪个城镇，空 = 无主
     public const string HexTown = "hex.town";              // str: 城址格才有值
     public static string HexBuilding(string buildingDefId) => "hex.building." + Bare(buildingDefId);

@@ -94,9 +94,13 @@ public sealed class BasicPlugin : IPlugin
         api.RegisterLayer("terrain", "地形", 10);
         api.RegisterLayer("owner", "领土", 20);
         api.RegisterLayer("agriculture", "农业潜力", 30);
+        api.RegisterLayer("resource", "资源", 40);
+        api.RegisterLayer("population", "人口密度", 50);
 
         api.Log($"数据：{api.Data.OfType(F.TypeLandform).Count} 种地表 / " +
                 $"{api.Data.OfType(F.TypeWaterbody).Count} 种水体 / " +
+                $"{api.Data.OfType(F.TypeShape).Count} 种形胜 / " +
+                $"{api.Data.OfType(F.TypeResource).Count} 种门槛资源 / " +
                 $"{api.Data.OfType(F.TypeClass).Count} 个阶级 / " +
                 $"{api.Data.OfType(F.TypeGood).Count} 种物资 / " +
                 $"{api.Data.OfType(F.TypeBuilding).Count} 类建筑");
@@ -153,6 +157,22 @@ public sealed class BasicPlugin : IPlugin
         {
             Fix y = ctx.GetFix(hex.Id, F.HexYieldFood, Fix.Zero);
             if (y < Fix.Zero) bad.Add($"{hex.Id}：粮潜力 {y.Text} 为负（§3.6 的 Y_g 是非负数）");
+            Fix yMat = ctx.GetFix(hex.Id, F.HexYieldMat, Fix.Zero);
+            if (yMat < Fix.Zero) bad.Add($"{hex.Id}：料潜力 {yMat.Text} 为负（§3.6 的 Y_g 是非负数）");
+
+            string shapeId = ctx.GetStr(hex.Id, F.HexShape);
+            if (!F.IsBlank(shapeId))
+            {
+                if (!ctx.Data.TryGet(shapeId, out var shapeDef) || shapeDef.Type != F.TypeShape)
+                    bad.Add($"{hex.Id}：形胜 '{shapeId}' 不是已知的 shape 记录（§3.4）");
+            }
+
+            string resourceId = ctx.GetStr(hex.Id, F.HexResource);
+            if (!F.IsBlank(resourceId))
+            {
+                if (!ctx.Data.TryGet(resourceId, out var resourceDef) || resourceDef.Type != F.TypeResource)
+                    bad.Add($"{hex.Id}：资源 '{resourceId}' 不是已知的 resource 记录（§3.5）");
+            }
 
             string waterId = ctx.GetStr(hex.Id, F.HexWater);
             if (!F.IsBlank(waterId))
@@ -164,8 +184,11 @@ public sealed class BasicPlugin : IPlugin
                     if (ctx.Get(hex.Id, F.HexBuildable).AsBool())
                         bad.Add($"{hex.Id}：{waterDef.GetStr("title")}却标成可建城（§3.8：水域不是城址）");
                     Fix expected = waterDef.GetFix("potential.food");
+                    if (!F.IsBlank(resourceId) && resourceId == "resource.fish"
+                        && ctx.Data.TryGet(resourceId, out var fishDef))
+                        expected += fishDef.GetFix("bonus.food", Fix.Zero);
                     if (y != expected)
-                        bad.Add($"{hex.Id}：{waterDef.GetStr("title")}粮潜力 {y.Text}，数据里是 {expected.Text}（§3.2 水域行）");
+                        bad.Add($"{hex.Id}：{waterDef.GetStr("title")}粮潜力 {y.Text}，数据里是 {expected.Text}（§3.2 水域行 + §3.5 渔汛）");
                 }
                 if (!F.IsBlank(ctx.GetStr(hex.Id, F.HexRiverDown)))
                     bad.Add($"{hex.Id}：水体格不该再有下游河段（§3.3 河到湖/海为止）");

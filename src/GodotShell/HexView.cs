@@ -30,6 +30,9 @@ public partial class HexView : Node2D
     private float _fitScale = 1f;
     private Vector2 _mapCenter;
 
+    /// <summary>当前显示的图层 id（§3.9）；只影响配色与标记，不改世界状态（M2 的 4–5 层）。</summary>
+    public string Layer { get; set; } = "terrain";
+
     /// <summary>辖地着色用的城色板：UI 资产，不进模拟（同一座城在任何一台机器上都是这个颜色，因为它按城序取）。</summary>
     private static readonly Color[] TownTints =
     [
@@ -162,6 +165,34 @@ public partial class HexView : Node2D
             if (owner.Length > 0 && tint.TryGetValue(owner, out var c))
                 baseColor = baseColor.Lerp(c, 0.34f);
 
+            // §3.9 图层是纯查询：只换配色/标记，不改任何字段。
+            switch (Layer)
+            {
+                case "resource":
+                    string resourceId = hex.GetStr("hex.resource");
+                    baseColor = resourceId.Length > 0
+                        ? DefColor(resourceId, baseColor)
+                        : baseColor.Darkened(0.55f);
+                    break;
+                case "population":
+                    if (owner.Length > 0 && tint.TryGetValue(owner, out var pc))
+                    {
+                        int pop = (int)world.GetInt(new EntityId(owner), "town.pop.peasant", 0);
+                        float blend = Mathf.Clamp(0.25f + (pop - 3) / 30f, 0.25f, 0.7f);
+                        baseColor = baseColor.Lerp(pc, blend);
+                    }
+                    else baseColor = baseColor.Darkened(0.55f);
+                    break;
+                case "agriculture":
+                    if (hex.GetStr("hex.water").Length == 0)
+                    {
+                        float y = (float)hex.GetFix("hex.yield.food", Fix.Zero).ToDouble();
+                        baseColor = new Color(0.24f, 0.28f, 0.17f)
+                            .Lerp(new Color(0.56f, 0.86f, 0.36f), Mathf.Clamp(y / 3f, 0f, 1f));
+                    }
+                    break;
+            }
+
             DrawColoredPolygon(poly, baseColor);
             DrawPolyline(poly, new Color(0f, 0f, 0f, 0.35f), 1f);
         }
@@ -202,6 +233,19 @@ public partial class HexView : Node2D
             {
                 DrawCircle(center, HexSize * 0.30f, new Color(0.12f, 0.12f, 0.14f, 0.90f));
                 DrawCircle(center, HexSize * 0.24f, tint.TryGetValue(townId, out var tc) ? tc : Colors.White);
+            }
+
+            // §3.4 形胜用左上小点标出（地形/领土图层都能看到）；资源图层在下方再点一个。
+            string shapeId = hex.GetStr("hex.shape");
+            if (shapeId.Length > 0)
+                DrawCircle(center + new Vector2(-HexSize * 0.52f, -HexSize * 0.42f), 4.5f,
+                    DefColor(shapeId, new Color(0.9f, 0.8f, 0.4f)));
+            if (Layer == "resource")
+            {
+                string resourceId = hex.GetStr("hex.resource");
+                if (resourceId.Length > 0)
+                    DrawCircle(center + new Vector2(0, HexSize * 0.62f), 5f,
+                        DefColor(resourceId, Colors.White));
             }
 
             if (hex.Id == _hover)
@@ -275,6 +319,14 @@ public partial class HexView : Node2D
             pts[k] = center + new Vector2((float)(HexSize * Mathf.Cos(angle)), (float)(HexSize * Mathf.Sin(angle)));
         }
         return pts;
+    }
+
+    /// <summary>数据里的 #rrggbb 配色；资源/形胜图层共用，缺字段时回落到调用方给的颜色。</summary>
+    private Color DefColor(string defId, Color fallback)
+    {
+        if (_sim is not null && _sim.Data.TryGet(defId, out var def))
+            return HtmlColor(def.GetStr("color"), fallback);
+        return fallback;
     }
 
     private Color ColorOf(Entity hex)

@@ -39,6 +39,37 @@
         "note": "str"
       }
     },
+    "shape": {
+      "idPrefix": "shape.",
+      "required": ["title", "glyph", "color", "yield.food", "yield.mat", "bonus.food", "moveFactor", "defenseFactor", "priority"],
+      "scalars": {
+        "title": "str",
+        "glyph": "str",
+        "color": "str",
+        "priority": "int",
+        "yield.food": "fix",
+        "yield.mat": "fix",
+        "bonus.food": "fix",
+        "bonus.mat": "fix",
+        "moveFactor": "fix",
+        "defenseFactor": "fix",
+        "note": "str"
+      }
+    },
+    "resource": {
+      "idPrefix": "resource.",
+      "required": ["title", "glyph", "color", "yield.food", "yield.mat", "bonus.food"],
+      "scalars": {
+        "title": "str",
+        "glyph": "str",
+        "color": "str",
+        "yield.food": "fix",
+        "yield.mat": "fix",
+        "bonus.food": "fix",
+        "bonus.mat": "fix",
+        "note": "str"
+      }
+    },
     "class": {
       "idPrefix": "class.",
       "required": ["title", "labor", "output.food", "consumes.food", "satisfaction.expects"],

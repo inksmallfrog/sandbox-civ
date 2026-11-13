@@ -207,7 +207,10 @@ public static class Runner
         foreach (string line in sim.StartupLog)
             if (line.Contains("建图", StringComparison.Ordinal)) Console.WriteLine(line.Trim());
         Console.WriteLine($"开局总耗时（数据 + 插件 + 建图）：{sw.Elapsed.TotalMilliseconds:0.0} ms");
-        Console.WriteLine(AsciiMap.Render(sim));
+        if (!sim.Layers.Any(l => string.Equals(l.Id, o.Layer, StringComparison.Ordinal)))
+            throw new CommandLineException(
+                $"不认识的图层 '{o.Layer}'；可用：{string.Join(" / ", sim.Layers.Select(l => l.Id))}");
+        Console.WriteLine(AsciiMap.Render(sim, o.Layer));
         if (o.Turns > 0)
         {
             Console.WriteLine($"跑 {o.Turns} 回合后的城镇：");

@@ -2,7 +2,7 @@
 
 > 规范来源：GDD §10.8（七类测试与「每里程碑附一份基线报告」）、§12（里程碑验收）、
 > §5.9（不变量）、§10.7（确定性）、§14（风险表的触发阈值）。
-> 实现：`tests/SimCore.Tests/`（70 条，1343 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
+> 实现：`tests/SimCore.Tests/`（86 条，1687 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```bash
 dotnet build                # TreatWarningsAsErrors：警告就是错误
-dotnet test                 # 70 条
+dotnet test                 # 86 条
 dotnet run --project src/HexaCiv.Cli -- check                    # 数据包 + 插件清单
 dotnet run --project src/HexaCiv.Cli -- hash   --seed 99 --turns 50
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5  --turns 20 --at 12
@@ -41,7 +41,7 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 
 ---
 
-## 2. 70 条的分层清单
+## 2. 86 条的分层清单
 
 ### `FixTests.cs`（12 条）· 定点数本体
 
@@ -91,6 +91,19 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 它们在测试里把 GDD 的公式**重新算了一遍**。实现与文档各写一次、结果必须撞在一起，
 这才叫「贴着附录 A 写代码」被机器看着——只断言一个手抄的期望值是拦不住公式改形的。
 
+### `MapFeatureTests.cs`（16 条）· §3.4 形胜 / §3.5 资源 / §3.9 图层
+
+形胜数据是GDD十二种且资源数据是GDD五种 · 每格的形胜与资源标签都能解析到数据 ·
+形胜与资源倍率按3_6节叠进粮料潜力 · 盆地是被高地围出的低地群 · 隘口是山脊缺口 ·
+河口与三角洲都在河入海处 · 上游高地是河流源头 · 峡谷是夹岸高地的河段 ·
+湖岛四面临水且绿洲在荒漠临水 · 盐湖是干旱湖泊且冲积扇在山前 · 火山在山地且每图最多两座 ·
+渔汛让水域粮潜力加一 · **二十个种子里十二种形胜都出现过** · **二十个种子里五种门槛资源都出现过** ·
+同种子同形胜资源换种子换形胜资源 · 图层声明补齐了资源与人口密度。
+
+前 11 条把 §3.4 的识别规则在**实现之外重写了一遍**（隘口两侧夹山、河口必须入海、
+上游高地必须是源头……）；后两条是 §12 M2 验收「同形胜在 20 张图里人工可认出」的机器侧证据，
+像不像仍要看 `analysis/out/m2-shapes.txt` 的 ASCII。
+
 ### `AcceptanceTests.cs`（14 条）· §12 里程碑验收
 
 空世界跑一千回合不崩（M0）· 同种子同命令流_逐回合哈希位级相同（M1）· 换种子必须换世界 ·
@@ -117,7 +130,7 @@ dotnet run --project src/HexaCiv.Cli -- hash --seed 7 --turns 6 --script scripts
 Godot .NET 4.7.2 --headless --path src/GodotShell -- --smoke        # Windows 可用 AGENTS.md 中的完整路径
 ```
 
-两边都必须给出末回合哈希 `707c154e0930be52`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
+两边都必须给出末回合哈希 `dbd386ed1bd058de`（`scripts/godot-smoke.txt` 与 `src/GodotShell/Main.cs` 的
 `Smoke()` 提交的命令**逐字相同**，改一边就要改另一边，否则这条比对立刻红）。
 Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 点）、字体回退、`SMOKE PASS`。
 
@@ -172,7 +185,7 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 |---|---|---|
 | `build-test` | `dotnet build` + `dotnet test --no-build` | 单元/契约/验收任一红。注意 `Directory.Build.props` 里 `TreatWarningsAsErrors=true`，警告也算红 |
 | `sim-headless` | `sim check` → `sim hash --seed 99 --turns 50` → `sim replay --seed 5 --turns 20 --at 12` → `sim run --seed 42 --turns 200 --headless --out` 并上传报告 | 确定性、回放等价、或基线报告无法生成 |
-| `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `707c154e0930be52`，并上传对账日志 |
+| `godot-smoke` | 下载官方 Godot .NET 4.7.2 → 构建 solution 与 GodotShell → CLI 对账 → `godot --headless --path src/GodotShell -- --smoke` | 跨宿主分叉（§3），或渲染/拾取崩了；同时强制匹配 `SMOKE PASS` 与两边末态 `dbd386ed1bd058de`，并上传对账日志 |
 
 2026-11-13 在 Windows 宿主 #2 按上述步骤复验通过，两个 Godot 官方下载地址均返回 200。
 **远端首跑尚未执行，所以 M0 仍为 🟡，不能写成 CI 已绿。** CI 里第一个 Linux 绿的哈希必须当场抄进

@@ -40,6 +40,7 @@ public static class Program
           --no-plugins        禁用全部插件：验证「Core 无玩法也能跑」（§0.2 判定 5）
           --no-data           不加载数据包
           --steps             打印 15 步的分步耗时
+          --layer <id>        sim map 的主图图层：terrain/owner/agriculture/resource/population，默认 terrain
           --explain           打印每条变更的因果链（§8.4）
           --lenient           不变量只记录不抛异常，用于抢救坏档
           --quiet             不打印年报
@@ -116,6 +117,8 @@ public sealed class Options
     public string Script = "scripts/demo.txt";
     public string DataDir = "data";
     public string PluginDir = "build/plugins";
+    /// <summary><c>map</c> 的主图图层 id（§3.9）。只是壳层的显示选择，不进模拟状态。</summary>
+    public string Layer = "terrain";
     /// <summary>位置参数：peek 用 <c>sim peek &lt;实体id&gt; [字段]</c>。</summary>
     public readonly List<string> Extra = new();
     public string PeekTarget => Extra.Count > 0 ? Extra[0] : "*";
@@ -149,6 +152,7 @@ public sealed class Options
                 case "--script": o.Script = Next(argv[i]); break;
                 case "--data": o.DataDir = Next(argv[i]); break;
                 case "--plugins": o.PluginDir = Next(argv[i]); break;
+                case "--layer": o.Layer = Next(argv[i]); break;
                 case "--headless": o.Headless = true; break;
                 case "--steps": o.Steps = true; break;
                 case "--explain": o.Explain = true; break;

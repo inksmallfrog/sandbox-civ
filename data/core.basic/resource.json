@@ -1,0 +1,29 @@
+{
+  "@comment": [
+    "GDD §3.5 的五种门槛资源（铁/马/盐/香料/渔汛）。它们是地块标签，不是第 6 种商品，",
+    "所以只写 hex.resource，不进 town.stock.* 的 5 类库存。",
+    "yield.food / yield.mat 是 §3.6 的「资源倍率」，默认 1.00；渔汛用 bonus.food = +1 粮，",
+    "因为 §3.5 原文是「湖海粮潜力 +1」而不是倍率。",
+    "iron/horse/salt/spice 的玩法效果是门槛（铁→重步、马→骑兵、盐→奢上限、香料→奢溢价），",
+    "对应的军事/贸易/奢侈品结算分别在 M7/M3/M5，M2 只把标签生成出来供选址、UI 与后续门槛读取。",
+    "glyph / color 只给壳层（ASCII 与 Godot 资源图层）用，模拟不读。"
+  ],
+  "type": "resource",
+  "entries": [
+    { "id": "resource.iron", "title": "铁", "glyph": "I", "color": "#9aa3ad",
+      "@note": "重步/攻城/矿场升级的门槛（§3.5；军事归 M7）",
+      "yield.food": 1.00, "yield.mat": 1.00, "bonus.food": 0.00 },
+    { "id": "resource.horse", "title": "马", "glyph": "H", "color": "#b08a5a",
+      "@note": "骑兵/驿传速度的门槛（§3.5；军事归 M7）",
+      "yield.food": 1.00, "yield.mat": 1.00, "bonus.food": 0.00 },
+    { "id": "resource.salt", "title": "盐", "glyph": "S", "color": "#e0e0d4",
+      "@note": "早期奢侈、食物保存；缺失则奢上限 −50%、冬季粮损耗 +10%（§3.5）",
+      "yield.food": 1.00, "yield.mat": 1.00, "bonus.food": 0.00 },
+    { "id": "resource.spice", "title": "香料", "glyph": "P", "color": "#c77a4a",
+      "@note": "奢侈品溢价与宗教仪式；缺失则奢价格上限 −30%（§3.5）",
+      "yield.food": 1.00, "yield.mat": 1.00, "bonus.food": 0.00 },
+    { "id": "resource.fish", "title": "渔汛", "glyph": "F", "color": "#4a90c7",
+      "@note": "湖海粮潜力 +1（§3.5 原文是加一，不是倍率）",
+      "yield.food": 1.00, "yield.mat": 1.00, "bonus.food": 1.00 }
+  ]
+}

@@ -3,9 +3,9 @@ using SimCore;
 namespace CoreBasic;
 
 /// <summary>
-/// 地图生成（GDD §3.7 六步管线的前四步 + §3.3 河网 + §3.1 水体层）。
+/// 地图生成（GDD §3.7 六步管线 + §3.3 河网 + §3.1 水体层 + §3.4 形胜 + §3.5 门槛资源）。
 ///
-/// M2 切片三的取舍与后续接口：
+/// M2 切片四的取舍与后续接口：
 /// - 地图形状是 §3.9 / §13.1 的 <b>32 × 20 矩形</b>：按 odd-r 偏移坐标铺格，存的是轴坐标，
 ///   于是屏幕上是矩形、<see cref="Distance(int,int)"/> 仍是标准轴距（§3.1）。
 /// - 高度图为「大陆轮廓（中央高、边缘低）+ 两层值噪声」；温度按行给纬度梯度，降水用两层值噪声（§3.7 第 3 步）。
@@ -14,8 +14,10 @@ namespace CoreBasic;
 /// - 河网按 §3.3 存成 <b>有向边</b>：每格写 `hex.river.down`（下游地块）、`hex.river.flow`、`hex.river.width`；
 ///   生成用优先淹没法，parent 链必然入海，不会成环、不会有无出口的内陆湖（§3.7 公平性检查的一条）。
 /// - §3.6 水利系数：河/湖相邻的陆格 Y_g × 1.15；水体格自己的 Y 走 `water.*` 数据（湖 2 / 近海 1）。
-/// - 形胜（§3.4）、门槛资源（§3.5）、图层 4–5（§3.9）仍是后续切片；
-///   深海（§3.2 水域行）等 M7 的海军切片再进来。
+/// - §3.4 十二种形胜由 <see cref="Features"/> 扫描拓扑关系识别，写成 `hex.shape`；
+///   §3.5 五种门槛资源按地形资格 + 每格确定性哈希生成，写成 `hex.resource`（不进 5 类库存）。
+///   §3.6 的乘法链在下面统一落成 `hex.yield.food/mat`、`hex.moveCost`、`hex.defense`。
+/// - 深海（§3.2 水域行）等 M7 的海军切片再进来；筑坝/水运/渡口归 M5/M7。
 /// - 任何生成算法改动都必须递增 <see cref="CoreInfo.MapGenVersion"/> 并写进存档（§3.7 末行、§10.6）；
 ///   旧种子会长出新地图，这是明写要求，不是回归。
 /// - 噪声与河网只用整数定点，不经过 float/double：地图字段进入世界哈希，
@@ -101,6 +103,8 @@ public static class MapGen
         var water = WaterTable(ctx.Data.OfType(F.TypeWaterbody));
         if (!water.TryGetValue("water.lake", out var lakeDef) || !water.TryGetValue("water.sea", out var seaDef))
             throw new SimDataException("数据包缺少 water.lake / water.sea（§3.2 的水域行），无法建水体");
+        var shapeDefs = DefTable(ctx.Data.OfType(F.TypeShape));
+        var resourceDefs = DefTable(ctx.Data.OfType(F.TypeResource));
 
         int count = columns * rows;
         var heights = new int[count];
@@ -110,8 +114,8 @@ public static class MapGen
         var ids = new EntityId[count];
         var sea = new bool[count];
 
-        // §3.7 第 1–4 步：高度 → 温度/降水 → 地表。分类方式和切片二完全一致，
-        // 水体是叠加层（§3.1）：这里的 landform 保留九类地表，hex.water 只额外说明「是不是水」。
+        // §3.7 第 1–2 步：高度 → 温度/降水。地表分类要等骨架雕刻之后再跑，
+        // 因为盆地的环、山谷的壁与峡谷的岸都会改高度，先分类会留下「高度说它还是森林」的谎。
         for (int row = 0; row < rows; row++)
             for (int col = 0; col < columns; col++)
             {
@@ -141,8 +145,14 @@ public static class MapGen
                 // 地图最外一圈是海（§3.1 近海），内圈仍按九类地表分类——
                 // 这样「同形胜可叠加在地表上」的那条数据规则不用为水体重写一遍。
                 sea[i] = col == 0 || row == 0 || col == columns - 1 || row == rows - 1;
-                landforms[i] = Classify(climate, heights[i], temps[i], rains[i], sea[i]);
             }
+
+        // §3.7 第 6 步的前半：主动雕刻一处盆地与一条山谷，保证 §3.4 的战略点不是纯运气。
+        Sculpt.CarveBasinAndValley(ctx, columns, rows, heights, sea, ids);
+
+        // §3.7 第 4 步：用雕刻后的高度重新命中九类地表的气候区间。
+        for (int i = 0; i < count; i++)
+            landforms[i] = Classify(climate, heights[i], temps[i], rains[i], sea[i]);
 
         // §3.7 第 3 步（河网）：沿高程下降，保证每条河最终入海或入湖。
         // 做法是「优先淹没法」：从所有海格出发，按「淹没水位」从低到高扩张，
@@ -223,6 +233,18 @@ public static class MapGen
                     watered[nb] = true;
         }
 
+        // §3.7 第 6 步的后半：挑一段高流量河雕刻峡谷（抬高两岸、压低河床），
+        // 再把被改动的格重新分类。河网走向不重算——河是在旧高度上选出来的，
+        // 这里只补「深窄河谷」的地形，不改 §3.3 的有向边。
+        foreach (int changed in Sculpt.CarveGorge(columns, rows, heights, sea, lake, river, flow, parent, ids))
+            landforms[changed] = Classify(climate, heights[changed], temps[changed], rains[changed], sea[changed]);
+
+        // §3.7 第 5–6 步：形胜识别与门槛资源。放在河网之后，因为河口/三角洲/上游高地/峡谷
+        // 都要读 hex.river.* 的有向边；形状标签本身是纯拓扑推导，不回头改地表。
+        var features = Features.Identify(
+            ctx, columns, rows, heights, temps, rains, sea, lake, river, flow, parent,
+            landforms, ids, shapeDefs, resourceDefs);
+
         var tally = new SortedDictionary<string, long>(StringComparer.Ordinal);
         var waterTally = new SortedDictionary<string, long>(StringComparer.Ordinal);
         int rivers = 0;
@@ -237,21 +259,56 @@ public static class MapGen
                 bool isSea = sea[i], isLake = lake[i];
                 string waterId = isSea ? seaDef.Id : isLake ? lakeDef.Id : "";
                 DataEntry waterDef = isSea ? seaDef : lakeDef;
+                string shapeId = features.Shape[i];
+                string resourceId = features.Resource[i];
+                DataEntry? shapeDef = shapeId.Length > 0 ? shapeDefs[shapeId] : null;
+                DataEntry? resourceDef = resourceId.Length > 0 ? resourceDefs[resourceId] : null;
 
                 tally[landform.Id] = tally.GetValueOrDefault(landform.Id) + 1;
                 if (waterId.Length > 0)
                     waterTally[waterId] = waterTally.GetValueOrDefault(waterId) + 1;
 
-                ctx.CreateEntity(F.KindHex, "新开局建图（§3.7 第 1–4 步 + §3.1 水体 + §3.3 河网）", id);
+                ctx.CreateEntity(F.KindHex,
+                    "新开局建图（§3.7 六步 + §3.1 水体 + §3.3 河网 + §3.4 形胜 + §3.5 门槛资源）", id);
                 ctx.Mutate(id, F.HexQ, q, "轴坐标 q（§3.1），与 id 互为冗余，读档后可互相校验");
                 ctx.Mutate(id, F.HexR, r, "轴坐标 r");
-                ctx.Mutate(id, F.HexHeight, heights[i], "高度图（§3.7 第 1 步）。形胜识别（§3.4）在 M2 读它");
+                ctx.Mutate(id, F.HexHeight, heights[i], "高度图（§3.7 第 1 步）；形胜识别（§3.4）读它");
                 ctx.Mutate(id, F.HexTemp, temps[i], "温度（§3.7）：纬度梯度 + 小噪声；冻土分类读它");
-                ctx.Mutate(id, F.HexRain, rains[i], "降水（§3.7）：两层值噪声；荒漠/湿地分类读它");
+                ctx.Mutate(id, F.HexRain, rains[i], "降水（§3.7）：两层值噪声；荒漠/湿地/盐湖分类读它");
                 ctx.Mutate(id, F.HexLandform, landform.Id,
                     $"高度 {heights[i]} / 温度 {temps[i]} / 降水 {rains[i]}{(isSea ? " / 边缘" : "")} 命中「{landform.GetStr("title")}」的气候区间（§3.2 / §3.7 第 4 步）");
-                ctx.Mutate(id, F.HexMoveCost, landform.GetInt("moveCost"), "§3.6 地表通行成本：行军与运输都读它（水上行军归 M7）");
-                ctx.Mutate(id, F.HexDefense, landform.GetInt("defense"), "§3.6 地表防御：M1 只写不算，军事在 M7");
+                // 数据里的 `@note` 按 §10.5 是注释、不进状态（DataRegistry.Flatten 剥掉 @ 键），
+                // 所以这里只在真的声明了 `note` 字段时才拼后缀，避免解释文本出现空冒号。
+                if (shapeDef is not null)
+                {
+                    string note = shapeDef.GetStr("note");
+                    ctx.Mutate(id, F.HexShape, shapeId,
+                        $"§3.4 形胜「{shapeDef.GetStr("title")}」{(note.Length > 0 ? "：" + note : "")}");
+                }
+                if (resourceDef is not null)
+                {
+                    string note = resourceDef.GetStr("note");
+                    ctx.Mutate(id, F.HexResource, resourceId,
+                        $"§3.5 门槛资源「{resourceDef.GetStr("title")}」{(note.Length > 0 ? "：" + note : "")}");
+                }
+
+                // §3.6 的 C、D 两行：形胜修正是乘在地表值上的，不是另一套通行/防御表。
+                Fix moveFactor = shapeDef?.GetFix("moveFactor", Fix.One) ?? Fix.One;
+                int baseMove = (int)landform.GetInt("moveCost");
+                int move = moveFactor == Fix.One ? baseMove
+                    : Math.Max(1, Fix.Mul(Fix.FromInt(baseMove), moveFactor).RoundToInt());
+                ctx.Mutate(id, F.HexMoveCost, move, shapeDef is null
+                    ? "§3.6 地表通行成本：行军与运输都读它（水上行军归 M7）"
+                    : $"§3.6 C：地表通行成本 {baseMove} × 形胜修正 {moveFactor.Text} = {move}（行军归 M7）");
+
+                Fix defenseFactor = shapeDef?.GetFix("defenseFactor", Fix.One) ?? Fix.One;
+                int baseDefense = (int)landform.GetInt("defense");
+                int defense = defenseFactor == Fix.One ? baseDefense
+                    : Fix.Mul(Fix.FromInt(baseDefense), defenseFactor).RoundToInt();
+                ctx.Mutate(id, F.HexDefense, defense, shapeDef is null
+                    ? "§3.6 地表防御：M1 只写不算，军事在 M7"
+                    : $"§3.6 D：地表防御 {baseDefense} × 形胜防御 {defenseFactor.Text} = {defense}（工事与战斗归 M7）");
+
                 ctx.Mutate(id, F.HexBuildable, SimValue.OfBool(waterId.Length == 0 && landform.Get("buildable").AsBool()),
                     waterId.Length == 0
                         ? "§3.2 可否建城（山地只能做隘口）"
@@ -260,17 +317,33 @@ public static class MapGen
                 if (waterId.Length > 0)
                 {
                     ctx.Mutate(id, F.HexWater, waterId, $"{waterDef.GetStr("title")}（§3.1 水体层）");
-                    Fix y = waterDef.GetFix("potential.food");
-                    ctx.Mutate(id, F.HexYieldFood, y,
-                        $"{waterDef.GetStr("title")}（§3.2 水域行）：粮潜力 {y.Text}，不叠地表潜力与水利系数");
+                    Fix bonus = resourceId == "resource.fish" ? resourceDef!.GetFix("bonus.food", Fix.Zero) : Fix.Zero;
+                    Fix y = waterDef.GetFix("potential.food") + bonus;
+                    ctx.Mutate(id, F.HexYieldFood, y, bonus.IsZero
+                        ? $"{waterDef.GetStr("title")}（§3.2 水域行）：粮潜力 {y.Text}，不叠地表潜力/形胜/水利系数"
+                        : $"{waterDef.GetStr("title")}（§3.2 水域行）：粮潜力 {y.Text} = 底值 {waterDef.GetFix("potential.food").Text} + 渔汛 {bonus.Text}（§3.5）");
+                    ctx.Mutate(id, F.HexYieldMat, Fix.Zero, "水域不产料（§3.6 的 Y_g 只对粮/料，水体只有粮）");
                 }
                 else
                 {
-                    Fix potential = landform.GetFix("potential.food");
-                    Fix y = watered[i] ? Fix.Mul(potential, Fix.FromPercent(115)) : potential;
-                    ctx.Mutate(id, F.HexYieldFood, y, watered[i]
-                        ? $"Y_g = 地表潜力 {potential.Text} × 水利系数 1.15（§3.6：河/湖相邻）"
-                        : $"Y_g 粮潜力（§3.6 第一行）：仍无形胜/资源倍率，水利系数 1.00");
+                    Fix potentialFood = landform.GetFix("potential.food");
+                    Fix potentialMat = landform.GetFix("potential.mat");
+                    Fix bonusFood = shapeDef?.GetFix("bonus.food", Fix.Zero) ?? Fix.Zero;
+                    Fix bonusMat = shapeDef?.GetFix("bonus.mat", Fix.Zero) ?? Fix.Zero;
+                    Fix shapeFood = shapeDef?.GetFix("yield.food", Fix.One) ?? Fix.One;
+                    Fix shapeMat = shapeDef?.GetFix("yield.mat", Fix.One) ?? Fix.One;
+                    Fix resFood = resourceDef?.GetFix("yield.food", Fix.One) ?? Fix.One;
+                    Fix resMat = resourceDef?.GetFix("yield.mat", Fix.One) ?? Fix.One;
+                    Fix waterFactor = watered[i] ? Fix.FromPercent(115) : Fix.One;
+
+                    Fix yFood = Fix.Mul(Fix.Mul(potentialFood + bonusFood, shapeFood), resFood);
+                    Fix yMat = Fix.Mul(Fix.Mul(potentialMat + bonusMat, shapeMat), resMat);
+                    if (watered[i]) { yFood = Fix.Mul(yFood, waterFactor); yMat = Fix.Mul(yMat, waterFactor); }
+
+                    ctx.Mutate(id, F.HexYieldFood, yFood,
+                        YieldReason("粮", potentialFood, bonusFood, shapeDef, shapeFood, resourceDef, resFood, waterFactor, yFood));
+                    ctx.Mutate(id, F.HexYieldMat, yMat,
+                        YieldReason("料", potentialMat, bonusMat, shapeDef, shapeMat, resourceDef, resMat, waterFactor, yMat));
                 }
 
                 if (!river[i]) continue;
@@ -286,20 +359,53 @@ public static class MapGen
             $"{ctx.Data.Get(kv.Key).GetStr("title")} {kv.Value} 格"));
         var waterDetail = string.Join("、", waterTally.Select(kv =>
             $"{ctx.Data.Get(kv.Key).GetStr("title")} {kv.Value} 格"));
-        ctx.Note($"地图：{columns} × {rows} 共 {count} 格 —— {detailTally}；水域 {waterDetail}；河段 {rivers} 段");
+        var shapeDetail = string.Join("、", features.ShapeTally.Select(kv =>
+            $"{ctx.Data.Get(kv.Key).GetStr("title")} {kv.Value} 格"));
+        var resourceDetail = string.Join("、", features.ResourceTally.Select(kv =>
+            $"{ctx.Data.Get(kv.Key).GetStr("title")} {kv.Value} 格"));
+        ctx.Note($"地图：{columns} × {rows} 共 {count} 格 —— {detailTally}；水域 {waterDetail}；河段 {rivers} 段；" +
+                 $"形胜 {features.ShapeTally.Values.Sum()} 格（{shapeDetail}）；资源 {features.ResourceTally.Values.Sum()} 格（{resourceDetail}）");
         ctx.Mutate(World.GlobalId, "meta.mapColumns", columns, "建图列数写回全局，UI 画边界与无头报告都要读（§3.9）");
         ctx.Mutate(World.GlobalId, "meta.mapRows", rows, "建图行数写回全局");
         ctx.Mutate(World.GlobalId, "meta.mapTiles", count, "地块总数");
         ctx.Mutate(World.GlobalId, "meta.mapWater", (long)waterTally.Values.Sum(),
             "水域格数（湖 + 近海，§3.1），图层与无头报告读它");
         ctx.Mutate(World.GlobalId, "meta.mapRivers", rivers, "河段数（§3.3），无头报告与跨宿主对账读它");
+        ctx.Mutate(World.GlobalId, "meta.mapShapeTiles", (long)features.ShapeTally.Values.Sum(),
+            "形胜覆盖格数（§3.4），无头报告与 20 张图验收读它");
+        ctx.Mutate(World.GlobalId, "meta.mapResourceTiles", (long)features.ResourceTally.Values.Sum(),
+            "门槛资源覆盖格数（§3.5），无头报告读它");
+        ctx.Mutate(World.GlobalId, "meta.mapShapeKinds", features.ShapeTally.Count,
+            "本图出现的形胜种类数（§3.4 共 12 种）");
+        ctx.Mutate(World.GlobalId, "meta.mapResourceKinds", features.ResourceTally.Count,
+            "本图出现的门槛资源种类数（§3.5 共 5 种）");
+    }
+
+    /// <summary>§3.6 第一行的因果文本：只列真正生效的乘数，没生效的不写进链里。</summary>
+    private static string YieldReason(
+        string good, Fix potential, Fix bonus, DataEntry? shape, Fix shapeMul,
+        DataEntry? resource, Fix resourceMul, Fix water, Fix result)
+    {
+        string head = $"地表{good}潜力 {potential.Text}";
+        if (!bonus.IsZero) head = $"（{head} + 形胜地力 {bonus.Text}）";
+        var parts = new List<string> { head };
+        if (shape is not null && shapeMul != Fix.One)
+            parts.Add($"形胜「{shape.GetStr("title")}」×{shapeMul.Text}");
+        if (resource is not null && resourceMul != Fix.One)
+            parts.Add($"资源「{resource.GetStr("title")}」×{resourceMul.Text}");
+        if (water != Fix.One) parts.Add("水利 ×1.15");
+        return $"Y_g = {string.Join(" × ", parts)} = {result.Text}（§3.6 第一行）";
     }
 
     /// <summary>水体数据按 id 建表（§3.2 水域行只认 water.lake / water.sea 两条）。</summary>
-    private static Dictionary<string, DataEntry> WaterTable(IReadOnlyList<DataEntry> waterbodies)
+    private static Dictionary<string, DataEntry> WaterTable(IReadOnlyList<DataEntry> waterbodies) =>
+        DefTable(waterbodies);
+
+    /// <summary>任意数据类型的 id → 记录表；顺序不参与运算，查表只按 id。</summary>
+    private static Dictionary<string, DataEntry> DefTable(IReadOnlyList<DataEntry> entries)
     {
         var table = new Dictionary<string, DataEntry>(StringComparer.Ordinal);
-        foreach (var e in waterbodies) table[e.Id] = e;
+        foreach (var e in entries) table[e.Id] = e;
         return table;
     }
 
@@ -309,7 +415,7 @@ public static class MapGen
                              : string.CompareOrdinal(ids[a].Value, ids[b].Value) < 0;
 
     /// <summary>轴坐标邻居 → 矩形网格下标；出界返回 false。用它就不必把 6 个方向写成 6 段判断。</summary>
-    private static bool TryNeighbor(int index, int dq, int dr, int columns, int rows, out int neighbor)
+    internal static bool TryNeighbor(int index, int dq, int dr, int columns, int rows, out int neighbor)
     {
         int row = index / columns, col = index % columns;
         var (q, r) = AxialOfOffset(col, row);
