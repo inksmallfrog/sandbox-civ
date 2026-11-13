@@ -55,7 +55,7 @@
 | 仓库结构 | ✅ | `docs/ARCH.md` §2 的目录树 = `ls` 结果 |
 | Godot + SimCore solution | ✅ | `HexaCiv.sln`（SimCore / core.basic / CLI / tests）；GodotShell 刻意不入 solution，理由见 `ARCH.md` §5 |
 | 文档 13 份（§11.1 要 12 份 + REQUIREMENTS） | ✅ | `docs/`：ARCH · CORE_API · PLUGIN_API · SIM_ORDER · DATA_SCHEMA · SAVE_FORMAT · NETWORKING · BALANCE · ROADMAP · TEST_PLAN · CHANGELOG-DESIGN · AI_HANDOFF = GDD 要求的另外 12 份，一份不缺；第 13 份是 `REQUIREMENTS.md`——§11.1 把 `GDD.md` 自己也算进 13 份里，而它是唯一不需要产出的那一份（且 AI 不得修改） |
-| **CI（单测 + headless）** | 🟡 **待远端 Windows 首验** | `.github/workflows/ci.yml` 有三个 job（`build-test` / `sim-headless` / `godot-smoke`）跑 `windows-latest`；`EXPECTED_SMOKE_HASH` 已对齐 `fc88ca36ce90fb37`。Linux 按设计者 2026-11-13 的决定暂不验，恢复时把三处 `os: [windows-latest]` 改回双系统。命令与判据在 `docs/TEST_PLAN.md` §6 |
+| **CI（单测 + headless）** | 🟡 **待远端 Windows 首验** | GitCode 实际识别 `.gitcode/workflows/ci.yml`（`build-test` + `sim-headless`，`runs-on: [windows-latest, x64, small]`）；`.github/workflows/ci.yml` 是 GitHub 镜像，含 `godot-smoke` 与 `EXPECTED_SMOKE_HASH = fc88ca36ce90fb37`。Linux 按设计者 2026-11-13 的决定暂不验。命令与判据在 `docs/TEST_PLAN.md` §6 |
 
 **这一条要在 M0 收尾时验收通过再打 `v0.0`**：§12 的推进规则是「验收不通过不许开下一个」。
 工作流入库只消除了配置缺口，不代替 CI 运行证据；首跑全绿后本节才能标 ✅。

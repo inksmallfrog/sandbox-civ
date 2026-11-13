@@ -46,7 +46,8 @@ Readme.md              人类入口：怎么跑起来
 AGENTS.md              本文件
 Directory.Build.props  net8.0 / C#12 / Nullable / 警告即错误 / RepoRoot
 HexaCiv.sln            SimCore + core.basic + sim + tests（GodotShell 刻意不在里面）
-.github/workflows/ci.yml 三 job × windows-latest；godot-smoke 强制核对 SMOKE PASS 与哈希
+.gitcode/workflows/ci.yml  GitCode（AtomGit）实际识别的流水线：build-test + sim-headless，Windows-only
+.github/workflows/ci.yml   GitHub 兼容镜像：三 job × windows-latest；godot-smoke 强制核对 SMOKE PASS 与哈希
 docs/                  GDD.md（唯一规则来源）+ §11.1 要求的文档 + REQUIREMENTS.md + DEV_ENVIRONMENTS.md + UI_DESIGN.md
 src/SimCore/           内核：20 个 .cs，引擎无关，一条玩法规则都没有
 src/Plugins/core.basic/ 参考规则包：10 个 .cs + manifest.json（M1–M4 的全部规则都在这一层）
@@ -160,9 +161,9 @@ godot --headless --path src/GodotShell -- --smoke # 看 SMOKE PASS；需 Godot .
 
 ## 10. 已知问题（会咬人的都在这里，全表见 `AI_HANDOFF.md` §5 与 `ROADMAP.md` §4）
 
-1. **CI 尚待远端首验（Windows-only）**：`.github/workflows/ci.yml` 有三个 job 跑 `windows-latest`，
-   但本地复验不等于 CI 绿；首跑全绿前 M0 仍标 🟡，不能打 `v0.0`。Linux 平台按设计者决定**暂不验**，
-   恢复时把三处 `os: [windows-latest]` 改回双系统即可。命令与判据见 `TEST_PLAN.md` §6。
+1. **CI 尚待远端首验（Windows-only）**：GitCode 只识别 `.gitcode/workflows/ci.yml`（`build-test` + `sim-headless`），
+   `.github/workflows/ci.yml` 是给 GitHub 镜像用的同一套判据。本地复验不等于 CI 绿；
+   首跑全绿前 M0 仍标 🟡，不能打 `v0.0`。Linux 平台按设计者决定**暂不验**。命令与判据见 `TEST_PLAN.md` §6。
 2. **两条接缝是「解析了但没人用」**：`SimConfig.YearLimit`（120/200 年不会自动结束）、
    `manifest.data_packs`（卡包开关还不生效）。**别误判成已生效**——前者归 M9，后者归 M8。
 3. **守恒等式**（§5.9 前三条）：**第一条已实现**（物资守恒 `basic.conservation`，第 10 步末校验，循环除 silver 外所有商品）；

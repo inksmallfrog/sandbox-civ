@@ -1,0 +1,55 @@
+name: ci-windows
+
+# GitCode（AtomGit）只识别 .gitcode/workflows/*.yml；.github/workflows/ci.yml 保留给
+# GitHub 兼容镜像，两边的命令与哈希判据必须一致（改一个就要改另一个）。
+# 平台范围：只跑 Windows（设计者 2026-11-13 决定暂不验 Linux）。
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  build-test:
+    name: 构建与单测（Windows）
+    runs-on: [windows-latest, x64, small]
+    timeout-minutes: 40
+    steps:
+      - name: 拉取代码
+        uses: checkout
+      - name: 安装 .NET SDK
+        uses: setup-dotnet
+        with:
+          dotnet-version: 8.0.x
+      - name: 构建解决方案
+        run: dotnet build -v q --nologo
+      - name: 运行全部测试
+        run: dotnet test --no-build --nologo
+
+  sim-headless:
+    name: 无头模拟（Windows）
+    runs-on: [windows-latest, x64, small]
+    timeout-minutes: 40
+    steps:
+      - name: 拉取代码
+        uses: checkout
+      - name: 安装 .NET SDK
+        uses: setup-dotnet
+        with:
+          dotnet-version: 8.0.x
+      - name: 构建解决方案与插件
+        run: dotnet build -v q --nologo
+      - name: 校验数据包、清单与结算表
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- check
+      - name: 确定性自检
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- hash --seed 99 --turns 50
+      - name: 存档回放等价自检
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- replay --seed 5 --turns 20 --at 12
+      - name: 生成二百年基线报告
+        run: dotnet run --project src/HexaCiv.Cli --no-build -- run --seed 42 --turns 200 --headless --out analysis/out/demo.csv

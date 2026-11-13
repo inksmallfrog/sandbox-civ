@@ -183,8 +183,10 @@ Godot 侧还顺带验渲染：`smoke 拾取：1920/1920 命中`（640 格 × 3 �
 
 ## 6. CI：配置已补，待首次 Windows 验收
 
-`.github/workflows/ci.yml` 已实现下列三个 job，全部使用 `windows-latest`（Linux 按设计者决定暂不验），
-`fail-fast: false`，避免一个系统先红就吞掉另一个系统的证据：
+**GitCode（实际远端）只识别 `.gitcode/workflows/*.yml`**，所以真正的流水线是
+`.gitcode/workflows/ci.yml`（`runs-on: [windows-latest, x64, small]`，`build-test` + `sim-headless` 两个 job）。
+`.github/workflows/ci.yml` 是 GitHub 兼容镜像，多一个 `godot-smoke` job；两边命令与哈希判据必须一致，改一个就要改另一个。
+全部 Windows-only（Linux 按设计者决定暂不验），`fail-fast: false`，避免一个 job 先红就吞掉另一个的证据：
 
 | job | 步骤 | 挂了意味着 |
 |---|---|---|
