@@ -33,7 +33,11 @@ public sealed class BasicPlugin : IPlugin
         (args, ctx) =>
         {
             if (!SimOrder.At(args, stepId, slot)) return;
-            ctx.DispatchSubjects(point, kind, ctx.EntitiesOfKind(kind).Select(e => e.Id).ToList());
+            // 主题级 handler 收到的是全新的 HookArgs（Core 只带 Subject），
+            // 所以扇出时必须把 stepId 显式转交——否则 Produce 无法知道自己在第 3/4/5 步。
+            string step = args.GetStr("stepId");
+            ctx.DispatchSubjects(point, kind, ctx.EntitiesOfKind(kind).Select(e => e.Id).ToList(),
+                id => new HookArgs { Subject = id }.With("stepId", step));
         };
 
     public void OnLoad(IPluginApi api)
@@ -66,8 +70,10 @@ public sealed class BasicPlugin : IPlugin
         // 第 2 步末：解锁闸门（§4.4）。必须排在设施折算之后——市场/作坊的等级是它的输入。
         api.Require(HookPoint.OnProduction, 95, TownOps.Unlocks);
 
-        // 第 3 步首：农业产出（公式一）。
+        // 第 3/4/5 步首：农业 / 工业 / 服务产出（公式一，按商品的 step 字段分步）。
         api.Require(HookPoint.OnProduction, 100, FanOut(HookPoint.OnProduction, F.KindTown, "agriculture", SimOrder.SlotPre));
+        api.Require(HookPoint.OnProduction, 100, FanOut(HookPoint.OnProduction, F.KindTown, "industry", SimOrder.SlotPre));
+        api.Require(HookPoint.OnProduction, 100, FanOut(HookPoint.OnProduction, F.KindTown, "services", SimOrder.SlotPre));
         api.RequireFor(HookPoint.OnProduction, F.KindTown, 100, SeasonRules.Produce);
 
         // 第 6 步首：城镇市场出清（公式二·本地层，α = 0.30）。落在 Summer 段、OnPriceForm 的 pre slot。

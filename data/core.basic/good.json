@@ -7,19 +7,19 @@
   "type": "good",
   "entries": [
     { "id": "good.food",   "title": "粮", "unit": "石", "basePrice": 4.00,
-      "stockCapPerPop": 2.00, "spoilage": 0.05, "essential": true,
+      "stockCapPerPop": 2.00, "spoilage": 0.05, "essential": true, "step": "agriculture",
       "@note": "全员生存刚需，价格最敏感" },
     { "id": "good.mat",    "title": "料", "unit": "捆", "basePrice": 3.00,
-      "stockCapPerPop": 1.50, "spoilage": 0.01, "essential": false,
-      "@note": "木/石/矿/陶合并；M3 接入" },
+      "stockCapPerPop": 1.50, "spoilage": 0.01, "essential": false, "step": "industry",
+      "@note": "木/石/矿/陶合并；§2.3 第 4 步（工业生产，含原料约束）" },
     { "id": "good.goods",  "title": "器", "unit": "件", "basePrice": 8.00,
-      "stockCapPerPop": 1.00, "spoilage": 0.00, "essential": false,
-      "@note": "工具/布/建材/兵器/书籍合并；M3 接入" },
+      "stockCapPerPop": 1.00, "spoilage": 0.00, "essential": false, "step": "industry",
+      "@note": "工具/布/建材/兵器/书籍合并；§2.3 第 4 步" },
     { "id": "good.lux",    "title": "奢", "unit": "份", "basePrice": 20.00,
-      "stockCapPerPop": 0.50, "spoilage": 0.00, "essential": false,
-      "@note": "奢侈品，满意度与文化燃料；M3 接入" },
+      "stockCapPerPop": 0.50, "spoilage": 0.00, "essential": false, "step": "services",
+      "@note": "奢侈品，满意度与文化燃料；§2.3 第 5 步" },
     { "id": "good.silver", "title": "银", "unit": "两", "basePrice": 1.00,
-      "spoilage": 0.00, "essential": false,
-      "@note": "货币 = 计价单位，不设仓容上限；国际结算的唯一手段" }
+      "spoilage": 0.00, "essential": false, "step": "services",
+      "@note": "货币 = 计价单位，不设仓容上限；国际结算的唯一手段。§2.3 第 5 步（商人贸易收入）" }
   ]
 }

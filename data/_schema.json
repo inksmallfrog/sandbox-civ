@@ -79,16 +79,18 @@
         "unlockPop": "int",
         "unlockTowns": "int",
         "unlockBuilding": "str",
+        "unlockRequires": "str",
         "unlockResource": "str",
         "unlockSurplus": "fix",
         "shareTarget": "fix",
         "satisfaction.expects": "fix",
         "satisfaction.baseline": "int",
+        "satisfaction.conflict": "fix",
         "status": "int",
         "taxWeight": "fix",
         "note": "str"
       },
-      "refs": { "unlockBuilding": "building" }
+      "refs": { "unlockBuilding": "building", "unlockRequires": "class" }
     },
     "good": {
       "idPrefix": "good.",
@@ -100,6 +102,7 @@
         "stockCapPerPop": "fix",
         "spoilage": "fix",
         "essential": "bool",
+        "step": "str",
         "note": "str"
       }
     },

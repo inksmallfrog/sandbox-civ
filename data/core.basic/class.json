@@ -47,6 +47,7 @@
       "taxWeight": 1.00,
       "unlockPop": 0,
       "unlockBuilding": "def:building.workshop",
+      "unlockRequires": "def:class.peasant",
       "shareTarget": 0.12,
       "@note": "第二产业；GDD §4.3 表第二行 + §4.8/§4.4：作坊解锁。outputCost.mat = 1.2；『器需求≥1』在工人出现前无解，M4 先只判作坊（D-040）"
     },
@@ -65,6 +66,7 @@
       "unlockPop": 0,
       "unlockBuilding": "def:building.market",
       "unlockTowns": 2,
+      "unlockRequires": "def:class.worker",
       "shareTarget": 0.05,
       "@note": "贸易执行者；GDD §4.3 表第三行 + §4.4：市场 + 与另一镇连通。道路/贸易 M5，M4 用『世界上至少 2 座城』代理连通（D-040）"
     },
@@ -82,6 +84,7 @@
       "unlockPop": 0,
       "unlockBuilding": "def:building.temple",
       "unlockSurplus": 10.00,
+      "unlockRequires": "def:class.merchant",
       "shareTarget": 0.03,
       "@note": "信仰/教化；GDD §4.3 表第四行 + §4.4：神庙 + 剩余≥10（剩余用城内存粮代理）。信仰产出 M7"
     },
@@ -98,6 +101,7 @@
       "taxWeight": 0.50,
       "unlockPop": 8,
       "unlockBuilding": "def:building.towncenter",
+      "unlockRequires": "def:class.priest",
       "shareTarget": 0.04,
       "@note": "行政/AP；GDD §4.3 表第五行 + §4.4：城镇中心 + 人口≥8。AP 容量 M9"
     },
@@ -114,6 +118,7 @@
       "taxWeight": 0.50,
       "unlockPop": 0,
       "unlockBuilding": "def:building.academy",
+      "unlockRequires": "def:class.bureaucrat",
       "shareTarget": 0.03,
       "@note": "科技/知识；GDD §4.3 表第六行 + §4.4：学宫 + 文字。「文字」属 M6 科技卡，M4 先只判学宫（D-040）"
     },
@@ -132,6 +137,7 @@
       "unlockPop": 0,
       "unlockBuilding": "def:building.barracks",
       "unlockResource": "iron,horse",
+      "unlockRequires": "def:class.scholar",
       "shareTarget": 0.04,
       "@note": "军事/战力；GDD §4.3 表第七行 + §4.4：兵营 + 铁或马。战力产出 M7"
     },
@@ -147,7 +153,9 @@
       "status": 0,
       "taxWeight": 0.50,
       "unlockPop": 20,
+      "unlockBuilding": "def:building.theater",
       "unlockSurplus": 30.00,
+      "unlockRequires": "def:class.soldier",
       "shareTarget": 0.02,
       "@note": "文化/艺术；GDD §4.3 表第八行 + §4.4：规模≥20 + 剩余≥30。规模用人口百人单位代理（D-040）；文化产出 M8"
     }

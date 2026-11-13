@@ -66,6 +66,8 @@ public static class F
     public const string TownRiot = "town.riot";                  // int: 本城最长连续 S<30 年数（§4.2；聚合值，年报/旧读者用）
     public const string TownCountdown = "town.countdown";        // int: 暴动控制权倒计时，3 年归零则脱离原属国（§4.2）
     public const string TownPopTotal = "town.pop.total";         // int: 全阶级人口合计（§4.5；第 13 步末写，守恒不变量读）
+    /// <summary>§4.5 公式三的税负项（0–1）。M5a 接上税制后由第 11 步写；此前恒 0。</summary>
+    public static string TownTaxBurden(string classDefId) => "town.tax." + Bare(classDefId);
 
     public static string TownPop(string classDefId) => "town.pop." + Bare(classDefId);
     public static string TownSat(string classDefId) => "town.sat." + Bare(classDefId);

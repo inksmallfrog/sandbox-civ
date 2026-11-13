@@ -651,6 +651,43 @@
 - 边界：价格仍只影响 `town.price.*`，**不影响消费分配**（`Consume` 不读价格）。
   这不是这次漏做，而是 GDD v1.1 §12 把「价格对行为的影响」明确划给 M5a；M3 只验公式与落点。
 
+### D-045 P1 四项：公式三税负/矛盾、解锁链硬顺序、minSat 全阶级、产出拆 3/4/5 步
+
+- 日期：2026-11-13 / 类型：规则实现 + 结构 / 状态：**已实现**
+- 改了什么：
+  1. **公式三补齐后两项**（REVIEW-M0-M4 §4.1，GDD v1.1 §4.5）：
+     `S* = baseline + 60(s−e) − 20·税负 − 15·矛盾`。`SeasonRules.Satisfaction` 读
+     `town.tax.<阶级>`（第 11 步税制写入，M5a 前恒 0）与阶级数据 `satisfaction.conflict`（0–1，M4 先配 0.00）。
+     政策/信仰/地位三项仍未接（归 M6–M9），解释文本按现值写 0。
+  2. **解锁链加硬前置**（§4.4 固定顺序）：八个阶级新增 `unlockRequires`，箭头为
+     农民→工人→商人→祭司→官僚→学者→军人→文艺家；`TownOps.MissingReason` 在其余六类条件之外
+     再判「前一阶级已解锁」，不满足就整条链停住。文艺家补 `unlockBuilding: def:building.theater`。
+  3. **年报最低满意度改为遍历全部阶级**（§4.5）：`Report` 只取 `pop>0` 的阶级的 `sat` 最小值，
+     不再固定只看农民；`国势栏是各城的合计` 测试同步改。
+  4. **产出按 §2.3 拆到第 3/4/5 步**（§4.6）：`Produce` 挂三次（agriculture / industry / services），
+     按商品的 `step` 字段各产各的；`output.*` 只在第 3 步清一次，第 4/5 步继续累加。
+     `FanOut` 把 `stepId` 转交给主题处理器；本步无产出的阶级整段跳过（否则原料会被白扣）。
+     `data/core.basic/good.json` 给五种商品加 `step`：粮 agriculture、料/器 industry、奢/银 services。
+- 为什么：审查报告 P1 的四条「方向性偏差」——公式三只剩「粮食够不够」、解锁可以跳级、
+  年报看不见非农民阶级、第 4/5 步的 hook 是空的。这些不改，M5 加税只会让全体一起掉满意度，
+  而不是产生「谁受益/谁受损」的政治；M5 挂工业 hook 的插件会看到工业已经算完了。
+- 模拟差异（当场复验，2026-11-13）：
+
+  | 命令 | D-044 值 | D-045 值 |
+  |---|---|---|
+  | `hash --seed 7 --turns 6 --script scripts/godot-smoke.txt` | `4983eb54fb4de27a` | **不变** |
+  | `hash --seed 99 --turns 50` | `b9c1f7cbfbe0928b` | `d5b046d92676eda2` |
+  | `replay --seed 5 --turns 20 --at 12` | `6ef1f5877c6eed22` / `5dbb715fcf6222b3` | **不变** |
+  | `run --seed 42 --turns 200` | `73077833df98cffb`（2 城 / 112 / minSat 37.16） | `1cc5b6d0e0501c99`（2 城 / 109 / 粮需 109.00 / minSat 37.81） |
+  | `dotnet test` | 106 | 109 |
+
+  种子 7/6 与 replay 不变，是因为演示脚本只跑农民单阶级、没有解锁转化，公式三新增项全为 0；
+  多阶级基线（99/50、42/200）动了，因为解锁链不再让文艺家提前出现，人口结构随之改变。
+  `dataHash` 由 `495c26d59b6e2362` → `d3e94063673c797e`（class.json 加 `unlockRequires` / 商品加 `step`）。
+- 影响：`BALANCE.md` §4 基线表整表重跑；`AGENTS.md` §7/§9/§10、`AI_HANDOFF.md`、`ROADMAP.md`、
+  `TEST_PLAN.md` 的期望值同步。**未做**（仍欠）：税制真值（M5a）、矛盾指数的六组结构项与财富落差（M5b）、
+  城际迁移（M5）、分产业 `Facility_c`（M5a）。
+
 ---
 
 ## 5. 逻辑量盘点（§12 推进规则第 2 条：只增不减视为失控信号）

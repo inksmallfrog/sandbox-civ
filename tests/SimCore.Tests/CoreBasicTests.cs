@@ -723,6 +723,81 @@ public class CoreBasicTests
             $"α 高 0.05 应让价格多走 p×0.05×gap = {delta.Text}，实测差 {diff.Text}");
     }
 
+    // ================= P1 公式三与解锁链（REVIEW-M0-M4 §3.2/§3.4）=================
+
+    /// <summary>
+    /// §4.5 公式三的税负项：−20·税负。同一 seed、同一城，只让一条分支的
+    /// <c>town.tax.peasant</c> = 0.50，S* 降 10，S 按 0.35 的收敛速度应降 3.50。
+    /// </summary>
+    [Fact]
+    public void 税负按公式三压低满意度()
+    {
+        var plain = OneTown(79);
+        var taxed = OneTown(79);
+        var taxedTown = Town(taxed);
+        taxed.World.WriteRaw(taxedTown.Id, F.TownTaxBurden("class.peasant"), SimValue.Of(Fix.FromPercent(50)));
+
+        plain.AdvanceTurn();
+        taxed.AdvanceTurn();
+
+        Fix satPlain = plain.World.GetFix(Town(plain).Id, F.TownSat("class.peasant"), Fix.Zero);
+        Fix satTaxed = taxed.World.GetFix(taxedTown.Id, F.TownSat("class.peasant"), Fix.Zero);
+        Fix diff = satPlain - satTaxed;      // 20 × 0.50 × 0.35 = 3.50
+        Fix expected = Fix.Mul(Fix.FromPercent(35), Fix.Mul(Fix.FromInt(20), Fix.FromPercent(50)));
+
+        Assert.True(Math.Abs(diff.Raw - expected.Raw) <= 3,
+            $"税负 0.50 应让满意度低 {expected.Text}，实测差 {diff.Text}");
+    }
+
+    /// <summary>
+    /// §4.3：解锁是硬顺序。文艺家的剧院/规模/剩余即使全满足，
+    /// 只要前一阶级（军人）没解锁，就必须继续锁着。
+    /// </summary>
+    [Fact]
+    public void 文艺家必须等前一阶级解锁()
+    {
+        var sim = OneTown(83);
+        var town = Town(sim);
+        sim.World.WriteRaw(town.Id, F.TownPop("class.peasant"), SimValue.OfInt(25));
+        sim.World.WriteRaw(town.Id, F.TownStock("good.food"), SimValue.Of(Fix.FromInt(100)));
+        sim.SubmitTarget("host", "building.build", "建剧院",
+            ("town", "auto"), ("building", "building.theater"));
+
+        var result = sim.AdvanceTurn();
+        Assert.Single(result.Commands, c => c.Accepted);
+
+        Assert.False(sim.World.GetField(town.Id, F.TownUnlocked("class.artist")).AsBool(),
+            "军人还没解锁，文艺家不能先出现（§4.3 固定顺序）");
+    }
+
+    /// <summary>
+    /// 年报的最低满意必须取「所有有人在的阶级」，不能只看农民——
+    /// 旧实现把农民满意度当成了全城最低值（REVIEW-M0-M4 §3.2）。
+    /// </summary>
+    [Fact]
+    public void 年报最低满意遍历所有阶级()
+    {
+        var sim = OneTown(89);
+        var town = Town(sim);
+        sim.World.WriteRaw(town.Id, F.TownPop("class.artist"), SimValue.OfInt(2));
+        sim.World.WriteRaw(town.Id, F.TownSat("class.artist"), SimValue.Of(Fix.FromInt(10)));
+        sim.World.WriteRaw(town.Id, F.TownSat("class.peasant"), SimValue.Of(Fix.FromInt(70)));
+
+        sim.AdvanceTurn();
+
+        Fix minSat = Fix.FromInt(100);
+        foreach (var cls in sim.Data.OfType(F.TypeClass))
+        {
+            if (sim.World.GetInt(town.Id, F.TownPop(cls.Id), 0) <= 0) continue;
+            Fix s = sim.World.GetFix(town.Id, F.TownSat(cls.Id), Fix.FromInt(50));
+            if (s < minSat) minSat = s;
+        }
+        Fix reported = sim.World.GetFix(World.GlobalId, F.ReportMinSat, Fix.FromInt(100));
+        Assert.Equal(minSat, reported);
+        Assert.True(reported <= Fix.FromInt(30),
+            $"文艺家满意度 10 应把最低值压到反抗线附近，实际报出 {reported.Text}");
+    }
+
     // ================= 人口（附录 A §8 / §4.2）=================
 
     [Fact]

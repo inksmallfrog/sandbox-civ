@@ -289,6 +289,19 @@ public static class TownOps
         if (totalPop < needPop)
             return $"人口 {totalPop} 不到 {needPop}";
 
+        // §4.3 的「前一阶级已解锁」硬前置（GDD v1.1 §4.3/§4.4）：
+        // 只判本条条件会让文艺家在没有任何工人、商人的村子里先出现。
+        string needClass = cls.GetStr("unlockRequires", "");
+        if (!F.IsBlank(needClass))
+        {
+            string prev = F.BareId(needClass);
+            if (!ctx.Get(town, F.TownUnlocked(prev)).AsBool())
+            {
+                string prevTitle = ctx.Data.TryGet(prev, out var prevDef) ? prevDef.GetStr("title") : prev;
+                return $"前一阶级「{prevTitle}」还没解锁（§4.3 固定顺序）";
+            }
+        }
+
         string needBuilding = cls.GetStr("unlockBuilding", "");
         if (!F.IsBlank(needBuilding))
         {

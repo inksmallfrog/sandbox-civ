@@ -38,10 +38,17 @@ public static class SeasonRules
     {
         Fix tech = Fix.One;                               // M6 换成科技卡倍率（1.0–2.5）
 
-        // ---- 先清零本期所有商品的 output 字段（Produce 每回合重算）----
-        foreach (var good in ctx.Data.OfType(F.TypeGood))
-            ctx.Mutate(town, F.TownOutput(good.Id), Fix.Zero,
-                $"第 3 步清 {good.GetStr("title")} 本期产出（上回合已 AddFix 进 stock）");
+        // §2.3 把产出拆成第 3/4/5 三步（农业 / 工业 / 服务）：
+        // 本处理器挂三次，按商品的 step 字段各产各的；output.* 只在第 3 步清一次，
+        // 后面两步继续累加，否则第 4 步会把第 3 步的粮产清掉。
+        string stepId = args.GetStr("stepId");
+        bool isAgricultureStep = string.Equals(stepId, "agriculture", StringComparison.Ordinal);
+        if (isAgricultureStep)
+        {
+            foreach (var good in ctx.Data.OfType(F.TypeGood))
+                ctx.Mutate(town, F.TownOutput(good.Id), Fix.Zero,
+                    $"第 3 步清 {good.GetStr("title")} 本期产出（上回合已 AddFix 进 stock）");
+        }
 
         Fix facility = ctx.GetFix(town, F.TownFacility, Fix.One);
         Fix capFood = LandCap(ctx, town, F.HexYieldFood);
@@ -73,7 +80,9 @@ public static class SeasonRules
                 if (lambda.IsZero) continue;
 
                 string goodId = "good." + goodShort;
-                if (!ctx.Data.TryGet(goodId, out _)) continue;
+                if (!ctx.Data.TryGet(goodId, out var goodA)) continue;
+                if (!string.Equals(goodA.GetStr("step", "agriculture"), stepId, StringComparison.Ordinal))
+                    continue;   // §2.3：粮在第 3 步、料在第 4 步
 
                 Fix soft = Fix.Mul(Fix.Mul(Fix.FromInt(pop), lambda), mult);
                 Fix cap = goodShort == "food" ? capFood : capMat;
@@ -106,7 +115,14 @@ public static class SeasonRules
             Fix statusMult = StatusMult(ctx.GetStr(town, F.TownStatus(cid)));
             Fix mult = Fix.Mul(tech, Fix.Mul(eta, statusMult));
 
-            // 原料约束：outputCost.<商品> = 每人每年的投入量；可满足比例 = min(1, 库存 / 需求)
+            // 本步没有该阶级的产出就整段跳过：否则原料会在第 3/5 步被扣掉却什么都不产
+            bool producesHere = OutputKeys(cls).Any(kv =>
+            {
+                string s = kv.Key["output.".Length..];
+                return ctx.Data.TryGet("good." + s, out var g)
+                       && string.Equals(g.GetStr("step", "agriculture"), stepId, StringComparison.Ordinal);
+            });
+            if (!producesHere) continue;
             Fix ratio = Fix.One;
             var inputs = new List<(string goodId, Fix need)>();
             foreach (var kv in cls.Scalars)
@@ -160,7 +176,7 @@ public static class SeasonRules
 
         // ---- 聚合解释：公式一正文（§8.4 要求公式原样出现在解释里）----
         Fix totalFoodOut = ctx.GetFix(town, F.TownOutput("good.food"), Fix.Zero);
-        if (!totalFoodOut.IsZero)
+        if (isAgricultureStep && !totalFoodOut.IsZero)
         {
             Fix hard = Fix.Mul(capFood, facility);
             ctx.Explain(town, "粮食产出（§5.2 公式一）",
@@ -337,7 +353,14 @@ public static class SeasonRules
             Fix e = cls.GetFix("satisfaction.expects");
             Fix baseline = Fix.FromInt((int)cls.GetInt("satisfaction.baseline", 50));
             Fix premium = Fix.Mul(Fix.FromInt(60), s - e);       // 60(s−e)
-            Fix star = (baseline + premium).Clamp(Fix.Zero, Hundred);
+            // §4.5 公式三的后两项：−20·税负 − 15·矛盾。
+            // 税负由第 11 步（M5a 税制）写 town.tax.<阶级>，此前恒 0；
+            // 矛盾_c 是阶级数据里的结构性冲突强度（0–1），M4 先配 0.00，标定归 M5b。
+            Fix taxBurden = ctx.GetFix(town, F.TownTaxBurden(cid), Fix.Zero);
+            Fix conflict = cls.GetFix("satisfaction.conflict", Fix.Zero);
+            Fix star = (baseline + premium
+                        - Fix.Mul(Fix.FromInt(20), taxBurden)
+                        - Fix.Mul(Fix.FromInt(15), conflict)).Clamp(Fix.Zero, Hundred);
 
             var stream = ctx.Rng.Stream(town, $"satisfaction.{F.Bare(cid)}.T{ctx.Time.Turn}");
             Fix xi = stream.NextGaussian(Fix.Zero, Fix.FromInt(2));   // ξ ~ N(0, 2)（§4.2）
@@ -591,8 +614,14 @@ public static class SeasonRules
             foreach (var cls in ctx.Data.OfType(F.TypeClass))
                 eaten += Fix.Mul(cls.GetFix("consumes.food"), ctx.GetInt(town.Id, F.TownPop(cls.Id)));
 
-            Fix sat = ctx.GetFix(town.Id, F.TownSat("class.peasant"), Fix.FromInt(50));
-            if (sat < minSat) minSat = sat;
+            // 最低满意取「所有有人在的阶级」，不能只看农民——
+            // 旧写法把「文艺家满意度」这类值固化成「农民满意度」（REVIEW-M0-M4 §3.2）
+            foreach (var cls in ctx.Data.OfType(F.TypeClass))
+            {
+                if (ctx.GetInt(town.Id, F.TownPop(cls.Id)) <= 0) continue;
+                Fix s = ctx.GetFix(town.Id, F.TownSat(cls.Id), Fix.FromInt(50));
+                if (s < minSat) minSat = s;
+            }
             if (ctx.GetInt(town.Id, F.TownRiot) > 0) unrest++;
         }
 

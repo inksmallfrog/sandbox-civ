@@ -101,7 +101,7 @@ data/
 ```
 数据包 E:\project\sandbox-civ\data
   ✓ 50 条记录 / 1 个包（core.basic）
-  dataHash = 495c26d59b6e2362
+  dataHash = d3e94063673c797e
     building   9 条：building.academy, building.barracks, building.farm, building.granary, building.market,
                      building.temple, building.theater, building.towncenter, building.workshop
     class      8 条：class.artist, class.bureaucrat, class.merchant, class.peasant, class.priest,

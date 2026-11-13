@@ -2,7 +2,7 @@
 
 > 规范来源：GDD §10.8（七类测试与「每里程碑附一份基线报告」）、§12（里程碑验收）、
 > §5.9（不变量）、§10.7（确定性）、§14（风险表的触发阈值）。
-> 实现：`tests/SimCore.Tests/`（106 条，1827 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
+> 实现：`tests/SimCore.Tests/`（109 条，2155 行）+ `src/HexaCiv.Cli` 的四个自检动词 + `src/GodotShell -- --smoke`。
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```bash
 dotnet build                # TreatWarningsAsErrors：警告就是错误
-dotnet test                 # 106 条
+dotnet test                 # 109 条
 dotnet run --project src/HexaCiv.Cli -- check                    # 数据包 + 插件清单
 dotnet run --project src/HexaCiv.Cli -- hash   --seed 99 --turns 50
 dotnet run --project src/HexaCiv.Cli -- replay --seed 5  --turns 20 --at 12
@@ -41,9 +41,9 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 
 ---
 
-## 2. 106 条的分层清单
+## 2. 109 条的分层清单
 
-> 下列条数按测试类粗分（`Theory` 的多组样本只计一次），因此与 `dotnet test` 的 106 条不必逐一对齐；
+> 下列条数按测试类粗分（`Theory` 的多组样本只计一次），因此与 `dotnet test` 的 109 条不必逐一对齐；
 > 判据以命令输出为准。
 
 ### `FixTests.cs`（12 条）· 定点数本体
@@ -77,7 +77,7 @@ dotnet run --project src/HexaCiv.Cli -- run    --seed 42 --turns 200 --headless 
 `System.Text.Json` 一声不响地落回默认值 0——优先级、数据包开关这类字段静默失效，
 比崩溃难查一个数量级。现在未知键（`@` 前缀的注释键除外）直接拒载。
 
-### `CoreBasicTests.cs`（42 条）· 规则语义
+### `CoreBasicTests.cs`（45 条）· 规则语义
 
 **地图是32乘20且id与轴坐标互证** · **同种子同图换种子换图** ·
 **地表是GDD九类且每格都命中自己的气候区间** · **温度随纬度升高且九类地表都能长出来** ·
@@ -210,8 +210,11 @@ GitCode 侧流水线仍受内测名额限制，未触发。CI 的首跑哈希必
 
 ## 7. 已知没测到的东西
 
-- **跨平台哈希**：只在 Windows 上比对过（CLI ↔ Godot 两个宿主，同一台机器、同一种 CPU/OS）。
-- **三条守恒等式**（§5.9 前三条）：M1 没有进出口与迁移，等式两边恒等，写了也测不出东西；M3 接公式二时一起补。
+- **跨平台哈希**：GitHub run #6 已在 `ubuntu-latest` 与 `windows-latest` 两侧验证同哈希（当时是 `fc88ca36ce90fb37`）；
+  D-043/D-045 之后世界状态新增字段、末态变为 `4983eb54fb4de27a`，**尚未在 CI 上重新取证**——
+  按推送纪律（`AGENTS.md` §8）等 M4 收尾时一次推 `github` 触发双系统 CI。
+- **三条守恒等式**（§5.9 前三条）：第一条（物资守恒 `basic.conservation`）已实现并有 2 条测试；
+  银守恒与人口守恒（迁移）归 M5，M4 只保证阶级转化「只搬人、不造人」（`basic.population`）。
 - **`GodotShell` 的渲染像素**：只验拾取命中与不崩，没有截图比对。
 - **热加载与创意工坊**：插件宿主在 M11 之前没有「运行中换 dll」路径，未测。
 - **多插件相互影响**：现在只有一个 `core.basic`，`load_priority` 与依赖排序只有单测层面的覆盖
