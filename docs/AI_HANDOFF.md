@@ -281,6 +281,15 @@ D-040 做了三件事：罚则改回 §4.2 原值（0.85 / 0.60）、反抗按�
 有界坏均衡，不是螺旋；要更健康的平衡需要 M5 的工资/贸易或更细的住房数据。
 在它修掉之前，**200 年基线的 pop 列不能当作「经济健康」的判据**，只能当作确定性对账用的哈希锚点。
 
+**坑 23 — Windows 上 `& Godot.exe --version` 之后 `$LASTEXITCODE` 是 `$null`，不是 0。**
+Godot 的 Windows 编辑器是 GUI 子系统程序：PowerShell 用 `&` 调用不会阻塞等待，也不会写 `$LASTEXITCODE`。
+于是 `if ($LASTEXITCODE -ne 0)` 变成 `$null -ne 0`（恒真），CI 把「版本打印成功」误判成「无法启动」——
+GitHub run #1 的 `godot-smoke` 就是这么红的（日志里先出现 `4.7.2.stable.mono.official.ed1daf0bf`，
+紧接着 `Godot 无法启动，退出码 ` 后面是空的）。对策（已写进 `.github/workflows/ci.yml`）：
+优先挑压缩包里的 `Godot*_console.exe`（它走控制台、阻塞并正常写退出码），
+并用 `Start-Process -Wait -PassThru -RedirectStandardOutput` 判退出码 + 校验版本字符串；
+后面 `--headless` 也必须指向 console 版，否则 bash 的 `2>&1 | tee` 抓不到任何输出。
+
 ---
 
 ## 6. 收工前复验（六条，跑完把新值写回 §1）

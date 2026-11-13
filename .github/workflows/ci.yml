@@ -82,10 +82,8 @@ jobs:
           $version = $env:GODOT_VERSION
           if ($IsWindows) {
             $asset = "Godot_v${version}-stable_mono_win64.zip"
-            $executable = "Godot_v${version}-stable_mono_win64.exe"
           } else {
             $asset = "Godot_v${version}-stable_mono_linux_x86_64.zip"
-            $executable = "Godot_v${version}-stable_mono_linux.x86_64"
           }
 
           $archive = Join-Path $env:RUNNER_TEMP $asset
@@ -95,11 +93,28 @@ jobs:
             -OutFile $archive
           Expand-Archive -Path $archive -DestinationPath $destination -Force
 
-          $binary = Get-ChildItem -Path $destination -Recurse -File -Filter $executable | Select-Object -First 1
-          if ($null -eq $binary) { throw "Godot 压缩包中找不到 $executable" }
+          # Windows 上的编辑器 exe 是 GUI 子系统程序：`& $exe` 不会阻塞、也不会写
+          # $LASTEXITCODE（保持 $null），于是 `$null -ne 0` 恒真、误判成启动失败。
+          # 对策：优先用同时分发的 _console.exe（它把 --version 输出到 stdout 并正常退出），
+          # 并用 Start-Process -Wait 判退出码。
+          if ($IsWindows) {
+            $binary = Get-ChildItem -Path $destination -Recurse -File -Filter "Godot*_console.exe" | Select-Object -First 1
+            if ($null -eq $binary) { $binary = Get-ChildItem -Path $destination -Recurse -File -Filter "Godot*.exe" | Select-Object -First 1 }
+          } else {
+            $binary = Get-ChildItem -Path $destination -Recurse -File -Filter "Godot*linux*x86_64" | Select-Object -First 1
+          }
+          if ($null -eq $binary) { throw "Godot 压缩包中找不到可执行文件（$asset）" }
+          Get-ChildItem -Path $destination -Recurse -File | Select-Object -ExpandProperty FullName | Write-Host
+
           if (-not $IsWindows) { chmod +x $binary.FullName }
-          & $binary.FullName --version
-          if ($LASTEXITCODE -ne 0) { throw "Godot 无法启动，退出码 $LASTEXITCODE" }
+
+          $stdout = Join-Path $env:RUNNER_TEMP "godot-version.log"
+          $proc = Start-Process -FilePath $binary.FullName -ArgumentList "--version" `
+            -Wait -PassThru -NoNewWindow -RedirectStandardOutput $stdout
+          $ver = if (Test-Path $stdout) { (Get-Content $stdout -Raw).Trim() } else { "" }
+          Write-Host "Godot 版本输出：'$ver'（退出码 $($proc.ExitCode)）"
+          if ($proc.ExitCode -ne 0) { throw "Godot 无法启动，退出码 $($proc.ExitCode)" }
+          if ($ver -notmatch [regex]::Escape($version)) { throw "Godot 版本不符：期望 $version，实际 '$ver'" }
 
           $binaryPath = $binary.FullName.Replace('\', '/')
           "GODOT_BIN=$binaryPath" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
